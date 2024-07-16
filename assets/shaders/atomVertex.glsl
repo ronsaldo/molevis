@@ -5,7 +5,8 @@ layout(std140, set = 1, binding = 0) uniform CameraStateBlock
     uvec2 screenSize;
 
     bool flipVertically;
-    float screenScale;
+    float nearDistance;
+    float farDistance;
 
     mat4 projectionMatrix;
     mat4 viewMatrix;

@@ -10,7 +10,8 @@ struct CameraState
     uint32_t screenHeight = 480;
 
     uint32_t flipVertically = false;
-    float screenScale = 10.0f;
+    float nearDistance = 0.1f;
+    float farDistance = 1000.0f;
 
     Matrix4x4 projectionMatrix;
     Matrix4x4 viewMatrix;
