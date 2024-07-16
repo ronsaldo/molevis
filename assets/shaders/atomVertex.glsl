@@ -89,8 +89,10 @@ void computeBoundingQuadForViewBoundingBox(vec3 viewBoundMin, vec3 viewBoundMax,
     vec3 projectedCornerMin = vec3(projectedMin.xy, projectedCornerDepth);
     vec3 projectedCornerMax = vec3(projectedMax.xy, projectedCornerDepth);
 
-    boundMin = unprojectPoint(projectedCornerMin);
-    boundMax = unprojectPoint(projectedCornerMax);
+    vec3 viewProjectedCornerMin = unprojectPoint(projectedCornerMin);
+    vec3 viewProjectedCornerMax = unprojectPoint(projectedCornerMax);
+    boundMin = min(viewProjectedCornerMin, viewProjectedCornerMax);
+    boundMax = max(viewProjectedCornerMin, viewProjectedCornerMax);
 }
 
 void computeBoundingQuadForViewSphere(vec3 center, float radius, out vec3 boundMin, out vec3 boundMax)
