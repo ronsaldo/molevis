@@ -37,7 +37,7 @@ layout(std430, set = 2, binding = 2) buffer AtomStateBufferBlock
     AtomState AtomStateBuffer[];
 };
 
-layout(location = 0) out vec4 outColor;
+layout(location = 0) flat out uint outAtomIndex;
 layout(location = 1) out vec3 outViewPosition;
 
 const vec2 quadVertices[4] = vec2[4](
@@ -68,8 +68,8 @@ void main()
     vec3 viewBoxFrontMax = vec3(viewBoxMax.xy, viewBoxMax.z);
     vec3 viewBoxFrontExtent = viewBoxFrontMax - viewBoxFrontMin;
 
-    // Pass the instance color
-    outColor = desc.color;
+    // Pass the instance index
+    outAtomIndex = gl_InstanceIndex;
 
     // Compute the quad view position,
     vec2 quadCoord = quadVertices[gl_VertexIndex];

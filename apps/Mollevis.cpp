@@ -14,6 +14,14 @@
 #include <vector>
 #include <string>
 #include <random>
+#include <time.h>
+
+int64_t getMicroseconds()
+{
+    timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return int64_t(ts.tv_sec*1000000) + int64_t(ts.tv_nsec/1000);
+}
 
 struct UIElementQuad
 {
@@ -400,15 +408,15 @@ public:
         commandList->close();
 
         // Main loop
-        auto oldTime = SDL_GetTicks();
+        auto oldTime = getMicroseconds();
         while(!isQuitting)
         {
-            auto newTime = SDL_GetTicks();
+            auto newTime = getMicroseconds();
             auto deltaTime = newTime - oldTime;
             oldTime = newTime;
 
             processEvents();
-            updateAndRender(deltaTime * 0.001f);
+            updateAndRender(deltaTime * 1.0e-6f);
         }
 
         commandQueue->finishExecution();
@@ -560,7 +568,7 @@ public:
         swapChain = device->createSwapChain(commandQueue, &newSwapChainCreateInfo);
 
         displayWidth = swapChain->getWidth();
-        displayWidth = swapChain->getHeight();
+        displayHeight = swapChain->getHeight();
         if(swapChain)
             currentSwapChainCreateInfo = newSwapChainCreateInfo;
     }
@@ -688,7 +696,9 @@ public:
             cameraTranslation += cameraMatrix * Vector3(0, 0, -wheelDelta);
         }
 
-        drawString("Test", Vector2{5, 5}, Vector4{1, 0, 0, 1});
+        char buffer[64];
+        snprintf(buffer, sizeof(buffer), "Update time %0.3f ms", delta*1000.0);
+        drawString(buffer, Vector2{5, 5}, Vector4{0.1, 1.0, 0.1, 1});
 
         auto cameraInverseMatrix = cameraMatrix.transposed();
         auto cameraInverseTranslation = cameraInverseMatrix * -cameraTranslation;
