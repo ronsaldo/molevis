@@ -21,8 +21,8 @@ struct Matrix4x4
         return Matrix4x4{{
             {2*near / (right - left), 0, 0, 0},
             {0, flipYFactor*2*near / (top - bottom), 0, 0},
-            {(right + left) / (right - left), flipYFactor*(top + bottom) / (top - bottom), -far / (far - near), -1},
-            {0, 0, -near*far / (far - near), 0}
+            {(right + left) / (right - left), flipYFactor*(top + bottom) / (top - bottom), near / (far - near), -1},
+            {0, 0, near*far / (far - near), 0}
         }};
     }
 

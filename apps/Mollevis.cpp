@@ -1,6 +1,9 @@
 #include "SDL.h"
 #include "SDL_syswm.h"
 #include "AGPU/agpu.hpp"
+#include "AtomDescription.hpp"
+#include "AtomState.hpp"
+#include "CameraState.hpp"
 #include "Vector2.hpp"
 #include "Vector3.hpp"
 #include "Vector4.hpp"
@@ -10,18 +13,7 @@
 #include <memory>
 #include <vector>
 #include <string>
-
-struct CameraState
-{
-    uint32_t screenWidth = 640;
-    uint32_t screenHeight = 480;
-
-    uint32_t flipVertically = false;
-    float screenScale = 10.0f;
-
-    Matrix4x4 projectionMatrix;
-    Matrix4x4 viewMatrix;
-};
+#include <random>
 
 struct UIElementQuad
 {
@@ -34,6 +26,31 @@ struct UIElementQuad
 
     Vector2 fontPosition;
     Vector2 fontSize;
+};
+
+struct Random
+{
+    Random(int seed = 45)
+    {
+        rand.seed(seed);
+    }
+
+    float randFloat(float min, float max)
+    {
+        return std::uniform_real_distribution<> (min, max)(rand);
+    }
+
+    Vector3 randVector3(const Vector3 &min, const Vector3 &max)
+    {
+        return Vector3{randFloat(min.x, max.x), randFloat(min.y, max.y), randFloat(min.z, max.z)};
+    }
+
+    Vector4 randVector4(const Vector4 &min, const Vector4 &max)
+    {
+        return Vector4{randFloat(min.x, max.x), randFloat(min.y, max.y), randFloat(min.z, max.z), randFloat(min.w, max.w)};
+    }
+
+    std::mt19937 rand;
 };
 
 class Mollevis
@@ -137,6 +154,7 @@ public:
         }
 
         currentSwapChainCreateInfo.colorbuffer_format = colorBufferFormat;
+        currentSwapChainCreateInfo.depth_stencil_format = depthBufferFormat;
         currentSwapChainCreateInfo.width = cameraState.screenWidth;
         currentSwapChainCreateInfo.height = cameraState.screenHeight;
         currentSwapChainCreateInfo.buffer_count = 3;
@@ -180,9 +198,17 @@ public:
             colorAttachment.clear_value.a = 0;
             colorAttachment.sample_count = 1;
 
+            agpu_renderpass_depth_stencil_description depthAttachment = {};
+            depthAttachment.format = depthBufferFormat;
+            depthAttachment.begin_action = AGPU_ATTACHMENT_CLEAR;
+            depthAttachment.end_action = AGPU_ATTACHMENT_KEEP;
+            depthAttachment.clear_value.depth = 0.0;
+            depthAttachment.sample_count = 1;
+
             agpu_renderpass_description description = {};
             description.color_attachment_count = 1;
             description.color_attachments = &colorAttachment;
+            description.depth_stencil_attachment = &depthAttachment;
 
             mainRenderPass = device->createRenderPass(&description);
         }
@@ -199,6 +225,12 @@ public:
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_UNIFORM_BUFFER, 1); // Screen and UI state
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // UI Data
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_SAMPLED_IMAGE, 1); // Bitmap font
+
+            builder->beginBindingBank(2);
+            builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Atom Description Buffer
+            builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Atom Bond Buffer
+            builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Atom Front State Buffer
+            builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Atom Back State Buffer
 
             shaderSignature = builder->build();
             if(!shaderSignature)
@@ -240,7 +272,7 @@ public:
             desc.size = (sizeof(UIElementQuad)*UIElementQuadBufferMaxCapacity + 255) & (-256);
             desc.heap_type = AGPU_MEMORY_HEAP_TYPE_HOST_TO_DEVICE;
             desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_STORAGE_BUFFER);
-            desc.main_usage_mode = AGPU_UNIFORM_BUFFER;
+            desc.main_usage_mode = AGPU_STORAGE_BUFFER;
 	        desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
             uiDataBuffer = device->createBuffer(&desc, nullptr);
         }
@@ -258,11 +290,87 @@ public:
             bitmapFontInverseHeight = 1.0 / desc.height;
         }
 
+        // Generate 1000 atoms
+        {
+            Random rand;
+            size_t AmountToGenerate = 1000;
+            atomDescriptions.reserve(AmountToGenerate);
+            initialAtomStates.reserve(AmountToGenerate);
+
+            for(size_t i = 0; i < AmountToGenerate; ++i)
+            {
+                auto description = AtomDescription{};
+                auto state = AtomState{};
+
+                description.radius = rand.randFloat(0.5, 2);
+                description.color = rand.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
+                state.position = rand.randVector3(-100, 100);
+
+                atomDescriptions.push_back(description);
+                initialAtomStates.push_back(state);
+            }
+        }
+
+        // Atom description buffer
+        {
+            agpu_buffer_description desc = {};
+            desc.size = (sizeof(AtomDescription)*std::max(atomDescriptions.size(), size_t(1024)) + 255) & (-256);
+            desc.heap_type = AGPU_MEMORY_HEAP_TYPE_HOST_TO_DEVICE;
+            desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_STORAGE_BUFFER);
+            desc.main_usage_mode = AGPU_STORAGE_BUFFER;
+	        desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
+            atomDescriptionBuffer = device->createBuffer(&desc, nullptr);
+            atomDescriptionBuffer->uploadBufferData(0, sizeof(AtomDescription)*atomDescriptions.size(), atomDescriptions.data());
+        }
+
+        // Atom state buffers
+        {
+            agpu_buffer_description desc = {};
+            desc.size = (sizeof(AtomState)*std::max(initialAtomStates.size(), size_t(1024)) + 255) & (-256);
+            desc.heap_type = AGPU_MEMORY_HEAP_TYPE_HOST_TO_DEVICE;
+            desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_STORAGE_BUFFER);
+            desc.main_usage_mode = AGPU_STORAGE_BUFFER;
+	        desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
+            
+            size_t uploadSize = sizeof(AtomState)*initialAtomStates.size();
+            atomStateFrontBuffer = device->createBuffer(&desc, nullptr);
+            atomStateFrontBuffer->uploadBufferData(0, uploadSize, initialAtomStates.data());
+
+            atomStateBackBuffer = device->createBuffer(&desc, nullptr);
+            atomStateBackBuffer->uploadBufferData(0, uploadSize, initialAtomStates.data());
+        }
+
+        atomFrontBufferBinding = shaderSignature->createShaderResourceBinding(2);
+        atomFrontBufferBinding->bindStorageBuffer(0, atomDescriptionBuffer);
+        atomFrontBufferBinding->bindStorageBuffer(2, atomStateFrontBuffer);
+        atomFrontBufferBinding->bindStorageBuffer(3, atomStateBackBuffer);
+
+        atomBackBufferBinding = shaderSignature->createShaderResourceBinding(2);
+        atomBackBufferBinding->bindStorageBuffer(0, atomDescriptionBuffer);
+        atomBackBufferBinding->bindStorageBuffer(2, atomStateBackBuffer);
+        atomBackBufferBinding->bindStorageBuffer(3, atomStateFrontBuffer);
+
+        // Atom draw pipeline state.
+        atomDrawVertex = compileShaderWithSourceFile("assets/shaders/atomVertex.glsl", AGPU_VERTEX_SHADER);
+        atomDrawFragment = compileShaderWithSourceFile("assets/shaders/atomFragment.glsl", AGPU_FRAGMENT_SHADER);
+
+        {
+            auto builder = device->createPipelineBuilder();
+            builder->setRenderTargetFormat(0, colorBufferFormat);
+            builder->setDepthStencilFormat(depthBufferFormat);
+            builder->setShaderSignature(shaderSignature);
+            builder->attachShader(atomDrawVertex);
+            builder->attachShader(atomDrawFragment);
+            builder->setPrimitiveType(AGPU_TRIANGLE_STRIP);
+            builder->setDepthState(true, true, AGPU_GREATER_EQUAL);
+            atomDrawPipeline = finishBuildingPipeline(builder);
+        }
+
         // Data binding
-        dataBinding = shaderSignature->createShaderResourceBinding(1);
-        dataBinding->bindUniformBuffer(0, cameraStateUniformBuffer);
-        dataBinding->bindStorageBuffer(1, uiDataBuffer);
-        dataBinding->bindSampledTextureView(2, bitmapFont->getOrCreateFullView());
+        uiBinding = shaderSignature->createShaderResourceBinding(1);
+        uiBinding->bindUniformBuffer(0, cameraStateUniformBuffer);
+        uiBinding->bindStorageBuffer(1, uiDataBuffer);
+        uiBinding->bindSampledTextureView(2, bitmapFont->getOrCreateFullView());
 
         // UI pipeline state.
         uiElementVertex = compileShaderWithSourceFile("assets/shaders/uiElementVertex.glsl", AGPU_VERTEX_SHADER);
@@ -390,6 +498,13 @@ public:
         leftDragDeltaX = 0;
         leftDragDeltaY = 0;
 
+        hasRightDragEvent = false;
+        hasHandledRightDragEvent = false;
+        rightDragStartX = 0;
+        rightDragStartY = 0;
+        rightDragDeltaX = 0;
+        rightDragDeltaY = 0;
+
         // Poll and process the SDL events.
         SDL_Event event;
         while(SDL_PollEvent(&event))
@@ -472,6 +587,15 @@ public:
             leftDragDeltaX = event.xrel;
             leftDragDeltaY = event.yrel;
         }
+
+        if(event.state & SDL_BUTTON_RMASK)
+        {
+            hasRightDragEvent = true;
+            rightDragStartX = event.x;
+            rightDragStartY = event.y;
+            rightDragDeltaX = event.xrel;
+            rightDragDeltaY = event.yrel;
+        }
     }
 
     void onMouseWheel(const SDL_MouseWheelEvent &event)
@@ -544,23 +668,31 @@ public:
     {
         uiElementQuadBuffer.clear();
 
-        auto cameraInverseMatrix = cameraMatrix.transposed();
-        auto cameraInverseTranslation = cameraInverseMatrix * -cameraTranslation;
-
-        cameraState.viewMatrix = Matrix4x4::withMatrix3x3AndTranslation(cameraInverseMatrix, cameraInverseTranslation);
-        cameraState.projectionMatrix = Matrix4x4::perspective(60.0, float(cameraState.screenWidth)/float(cameraState.screenHeight), 0.1, 1000.0, device->hasTopLeftNdcOrigin());
-
         // Left drag.
         if(hasLeftDragEvent && !hasHandledLeftDragEvent)
         {
+            cameraAngle += Vector3(leftDragDeltaY, leftDragDeltaX, 0) * 1.0/M_PI;
+        }
+
+        // Right drag.
+        if(hasRightDragEvent && !hasHandledRightDragEvent)
+        {
+            cameraTranslation += cameraMatrix * (Vector3(rightDragDeltaX, -rightDragDeltaY, 0) * 0.001f);
         }
 
         // Mouse wheel.
         if(hasWheelEvent && !hasHandledWheelEvent)
         {
+            cameraTranslation.z += wheelDelta;
         }
 
         drawString("Test", Vector2{5, 5}, Vector4{1, 0, 0, 1});
+
+        auto cameraInverseMatrix = cameraMatrix.transposed();
+        auto cameraInverseTranslation = cameraInverseMatrix * -cameraTranslation;
+
+        cameraState.viewMatrix = Matrix4x4::withMatrix3x3AndTranslation(cameraInverseMatrix, cameraInverseTranslation);
+        cameraState.projectionMatrix = Matrix4x4::perspective(60.0, float(cameraState.screenWidth)/float(cameraState.screenHeight), 0.1, 1000.0, device->hasTopLeftNdcOrigin());
 
         // Upload the data buffers.
         cameraStateUniformBuffer->uploadBufferData(0, sizeof(cameraState), &cameraState);
@@ -578,10 +710,15 @@ public:
         commandList->setViewport(0, 0, displayWidth, displayHeight);
         commandList->setScissor(0, 0, displayWidth, displayHeight);
 
+        // Atoms
+        commandList->usePipelineState(atomDrawPipeline);
+        commandList->useShaderResources(samplersBinding);
+        commandList->useShaderResources(uiBinding);
+        commandList->useShaderResources(atomFrontBufferBinding);
+        commandList->drawArrays(4, atomDescriptions.size(), 0, 0);
+
         // UI element pipeline
         commandList->usePipelineState(uiPipeline);
-        commandList->useShaderResources(samplersBinding);
-        commandList->useShaderResources(dataBinding);
         commandList->drawArrays(4, uiElementQuadBuffer.size(), 0, 0);
 
         // Finish the command list
@@ -646,7 +783,8 @@ public:
     SDL_Window *window = nullptr;
     bool isQuitting = false;
 
-    agpu_texture_format colorBufferFormat = AGPU_TEXTURE_FORMAT_B8G8R8A8_UNORM;
+    agpu_texture_format colorBufferFormat = AGPU_TEXTURE_FORMAT_B8G8R8A8_UNORM_SRGB;
+    agpu_texture_format depthBufferFormat = AGPU_TEXTURE_FORMAT_D32_FLOAT;
 
     agpu_device_ref device;
     agpu_command_queue_ref commandQueue;
@@ -666,7 +804,19 @@ public:
 
     agpu_buffer_ref cameraStateUniformBuffer;
     agpu_buffer_ref uiDataBuffer;
-    agpu_shader_resource_binding_ref dataBinding;
+    agpu_shader_resource_binding_ref uiBinding;
+
+    agpu_shader_ref atomDrawVertex;
+    agpu_shader_ref atomDrawFragment;
+    agpu_pipeline_state_ref atomDrawPipeline;
+
+    std::vector<AtomDescription> atomDescriptions; 
+    std::vector<AtomState> initialAtomStates;
+    agpu_buffer_ref atomDescriptionBuffer;
+    agpu_buffer_ref atomStateFrontBuffer;
+    agpu_buffer_ref atomStateBackBuffer;
+    agpu_shader_resource_binding_ref atomFrontBufferBinding;
+    agpu_shader_resource_binding_ref atomBackBufferBinding;
 
     agpu_texture_ref bitmapFont;
     float bitmapFontScale = 1.5;
@@ -678,6 +828,7 @@ public:
 
     CameraState cameraState;
     Matrix3x3 cameraMatrix = Matrix3x3::identity();
+    Vector3 cameraAngle = Vector3{0, 0, 0};
     Vector3 cameraTranslation = Vector3{0, 0, 5};
 
     size_t UIElementQuadBufferMaxCapacity = 4192;
@@ -693,6 +844,14 @@ public:
     int leftDragStartY = 0;
     int leftDragDeltaX = 0;
     int leftDragDeltaY = 0;
+
+    bool hasRightDragEvent = false;
+    bool hasHandledRightDragEvent = false;
+    int rightDragStartX = 0;
+    int rightDragStartY = 0;
+    int rightDragDeltaX = 0;
+    int rightDragDeltaY = 0;
+
     int displayWidth = 640;
     int displayHeight = 480;
 };
