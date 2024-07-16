@@ -1,14 +1,15 @@
 #version 450
 
-layout(std140, set = 1, binding = 0) uniform ScreenAndUIStateBlock
+layout(std140, set = 1, binding = 0) uniform CameraStateBlock
 {
     uvec2 screenSize;
 
     bool flipVertically;
     float screenScale;
 
-    vec2 screenOffset;
-} ScreenAndUIState;
+    mat4 projectionMatrix;
+    mat4 viewMatrix;
+} CameraState;
 
 struct UIElementQuad
 {
@@ -17,8 +18,6 @@ struct UIElementQuad
     vec4 color;
     
     bool isGlyph;
-    uint reserved;
-    uvec2 reserved2;
 
     vec2 fontPosition;
     vec2 fontSize;
@@ -60,7 +59,7 @@ void main()
     outIsGlyph = quad.isGlyph ? 1 : 0;
     outGlyphCoord = quad.fontPosition + quad.fontSize*quadCoord;
 
-    gl_Position = vec4(position / vec2(ScreenAndUIState.screenSize)*2.0 - 1.0, 0.0, 1.0);
-    if(ScreenAndUIState.flipVertically)
+    gl_Position = vec4(position / vec2(CameraState.screenSize)*2.0 - 1.0, 0.0, 1.0);
+    if(CameraState.flipVertically)
         gl_Position.y = -gl_Position.y;
 }

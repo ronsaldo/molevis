@@ -1,13 +1,17 @@
 #include "SDL.h"
 #include "SDL_syswm.h"
 #include "AGPU/agpu.hpp"
+#include "Vector2.hpp"
+#include "Vector3.hpp"
+#include "Vector4.hpp"
+#include "Matrix4x4.hpp"
 #include <stdint.h>
 #include <stdio.h>
 #include <memory>
 #include <vector>
 #include <string>
 
-struct ScreenAndUIState
+struct CameraState
 {
     uint32_t screenWidth = 640;
     uint32_t screenHeight = 480;
@@ -15,22 +19,21 @@ struct ScreenAndUIState
     uint32_t flipVertically = false;
     float screenScale = 10.0f;
 
-    float screenOffsetX = 0.0f;
-    float screenOffsetY = 0.0f;
+    Matrix4x4 projectionMatrix;
+    Matrix4x4 viewMatrix;
 };
 
 struct UIElementQuad
 {
-    float x, y;
-    float width, height;
+    Vector2 position;
+    Vector2 size;
 
-    float r, g, b, a;
+    Vector4 color;
 
     uint32_t isGlyph;
-    uint32_t reserved[3];
 
-    float fontX, fontY;
-    float fontWidth, fontHeight;
+    Vector2 fontPosition;
+    Vector2 fontSize;
 };
 
 class Mollevis
@@ -93,7 +96,7 @@ public:
         SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
         SDL_Init(SDL_INIT_VIDEO);
 
-        window = SDL_CreateWindow("Mollevis", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, screenAndUIState.screenWidth, screenAndUIState.screenHeight, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+        window = SDL_CreateWindow("Mollevis", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, cameraState.screenWidth, cameraState.screenHeight, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
         if(!window)
         {
             fprintf(stderr, "Failed to create window.\n");
@@ -134,8 +137,8 @@ public:
         }
 
         currentSwapChainCreateInfo.colorbuffer_format = colorBufferFormat;
-        currentSwapChainCreateInfo.width = screenAndUIState.screenWidth;
-        currentSwapChainCreateInfo.height = screenAndUIState.screenHeight;
+        currentSwapChainCreateInfo.width = cameraState.screenWidth;
+        currentSwapChainCreateInfo.height = cameraState.screenHeight;
         currentSwapChainCreateInfo.buffer_count = 3;
         currentSwapChainCreateInfo.flags = AGPU_SWAP_CHAIN_FLAG_APPLY_SCALE_FACTOR_FOR_HI_DPI;
         if (vsyncDisabled)
@@ -171,9 +174,9 @@ public:
             colorAttachment.format = colorBufferFormat;
             colorAttachment.begin_action = AGPU_ATTACHMENT_CLEAR;
             colorAttachment.end_action = AGPU_ATTACHMENT_KEEP;
-            colorAttachment.clear_value.r = 0;
-            colorAttachment.clear_value.g = 0;
-            colorAttachment.clear_value.b = 0;
+            colorAttachment.clear_value.r = 0.5;
+            colorAttachment.clear_value.g = 0.5;
+            colorAttachment.clear_value.b = 0.5;
             colorAttachment.clear_value.a = 0;
             colorAttachment.sample_count = 1;
 
@@ -223,12 +226,12 @@ public:
         // Screen and UI State buffer
         {
             agpu_buffer_description desc = {};
-            desc.size = (sizeof(ScreenAndUIState) + 255) & (-256);
+            desc.size = (sizeof(CameraState) + 255) & (-256);
             desc.heap_type = AGPU_MEMORY_HEAP_TYPE_HOST_TO_DEVICE;
             desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_UNIFORM_BUFFER);
             desc.main_usage_mode = AGPU_UNIFORM_BUFFER;
 	        desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
-            screenAndUIStateUniformBuffer = device->createBuffer(&desc, nullptr);
+            cameraStateUniformBuffer = device->createBuffer(&desc, nullptr);
         }
 
         {
@@ -257,7 +260,7 @@ public:
 
         // Data binding
         dataBinding = shaderSignature->createShaderResourceBinding(1);
-        dataBinding->bindUniformBuffer(0, screenAndUIStateUniformBuffer);
+        dataBinding->bindUniformBuffer(0, cameraStateUniformBuffer);
         dataBinding->bindStorageBuffer(1, uiDataBuffer);
         dataBinding->bindSampledTextureView(2, bitmapFont->getOrCreateFullView());
 
@@ -431,8 +434,8 @@ public:
     {
         int w, h;
         SDL_GetWindowSize(window, &w, &h);
-        screenAndUIState.screenWidth = w;
-        screenAndUIState.screenHeight = h;
+        cameraState.screenWidth = w;
+        cameraState.screenHeight = h;
 
         device->finishExecution();
         auto newSwapChainCreateInfo = currentSwapChainCreateInfo;
@@ -477,37 +480,25 @@ public:
         wheelDelta = event.y;
     }
 
-    void drawRectangle(float x, float y, float w, float h, float r, float g, float b, float a)
+    void drawRectangle(const Vector2 &position, const Vector2 &size, const Vector4 &color)
     {
         UIElementQuad quad = {};
-        quad.x = x;
-        quad.y = y;
-        quad.width = w;
-        quad.height = h;
-        
-        quad.r = r;
-        quad.g = g;
-        quad.b = b;
-        quad.a = a;
+        quad.position = position;
+        quad.size = size;
+        quad.color = color;
 
         uiElementQuadBuffer.push_back(quad);
     }
 
-    float drawGlyph(char c, float x, float y, float r, float g, float b, float a)
+    Vector2 drawGlyph(char c, const Vector2 &position, const Vector4 &color)
     {
         if(c < ' ')
-            return bitmapFontGlyphWidth*bitmapFontScale;
+            return Vector2{bitmapFontGlyphWidth*bitmapFontScale, 0.0f};
 
         UIElementQuad quad = {};
-        quad.x = x;
-        quad.y = y;
-        quad.width = bitmapFontGlyphWidth*bitmapFontScale;
-        quad.height = bitmapFontGlyphHeight*bitmapFontScale;
-        
-        quad.r = r;
-        quad.g = g;
-        quad.b = b;
-        quad.a = a;
+        quad.position = position;
+        quad.size = Vector2{bitmapFontGlyphWidth*bitmapFontScale, bitmapFontGlyphHeight*bitmapFontScale};
+        quad.color = color;
 
         if (' ' <= c && c <= 127)
         {
@@ -515,22 +506,20 @@ public:
             int column = index % bitmapFontColumns;
             int row = index / bitmapFontColumns;
             quad.isGlyph = true;
-            quad.fontX = column * bitmapFontGlyphWidth * bitmapFontInverseWidth;
-            quad.fontY = row * bitmapFontGlyphHeight * bitmapFontInverseHeight;
-            quad.fontWidth = bitmapFontGlyphWidth * bitmapFontInverseWidth;
-            quad.fontHeight = bitmapFontGlyphHeight * bitmapFontInverseHeight;
+            quad.fontPosition = Vector2{column * bitmapFontGlyphWidth * bitmapFontInverseWidth, row * bitmapFontGlyphHeight * bitmapFontInverseHeight};
+            quad.fontSize = Vector2{bitmapFontGlyphWidth * bitmapFontInverseWidth,  bitmapFontGlyphHeight * bitmapFontInverseHeight};
         }
 
         uiElementQuadBuffer.push_back(quad);
-        return bitmapFontGlyphWidth*bitmapFontScale;
+        return Vector2{bitmapFontGlyphWidth*bitmapFontScale, 0.0f};
     }
 
-    float drawString(const std::string &string, float x, float y, float r, float g, float b, float a)
+    Vector2 drawString(const std::string &string, const Vector2 &position, const Vector4 &color)
     {
-        auto sx = x;
+        Vector2 totalAdvance = {0, 0};
         for(auto c : string)
-            x += drawGlyph(c, x, y, r, g, b, a);
-        return x - sx;
+            totalAdvance += drawGlyph(c, position + totalAdvance, color);
+        return totalAdvance;
     }
 
     float currentLayoutRowX = 0;
@@ -551,61 +540,30 @@ public:
         currentLayoutY = currentLayoutRowY;
     }
 
-    void sliderForFloat(const std::string &label, float minValue, float maxValue, float &value)
-    {
-        currentLayoutX += drawString(label, currentLayoutX, currentLayoutY, 1.0, 1.0, 1.0, 0.6);
-
-        float sliderHeight = bitmapFontGlyphHeight * bitmapFontScale;
-        float sliderWidth = 80;
-
-        float alpha = (std::min(std::max(value, minValue), maxValue) - minValue) / (maxValue - minValue);
-
-        drawRectangle(currentLayoutX, currentLayoutY, sliderWidth, sliderHeight, 1.0, 1.0, 1.0, 0.6);
-
-        if(hasLeftDragEvent && !hasHandledLeftDragEvent &&
-            currentLayoutY <= leftDragStartY && leftDragStartY <= currentLayoutY + sliderHeight &&
-            currentLayoutX <= leftDragStartX && leftDragStartX <= currentLayoutX + sliderWidth)
-        {
-            if(leftDragDeltaX != 0)
-            {
-                float deltaAlpha = leftDragDeltaX / sliderWidth;
-                alpha = std::min(std::max(alpha + deltaAlpha, 0.0f), 1.0f);
-                value = minValue + (maxValue - minValue)*alpha;
-            }
-
-            hasHandledLeftDragEvent = true;
-        }
-
-        float sliderBarWidth = 4;
-        drawRectangle(currentLayoutX + (sliderWidth - sliderBarWidth)*alpha, currentLayoutY, sliderBarWidth, sliderHeight, 0.0, 1.0, 0.0, 1.0);
-
-        currentLayoutX += sliderWidth;
-        currentLayoutX += 5;
-    }
-
     void updateAndRender(float delta)
     {
         uiElementQuadBuffer.clear();
 
+        auto cameraInverseMatrix = cameraMatrix.transposed();
+        auto cameraInverseTranslation = cameraInverseMatrix * -cameraTranslation;
+
+        cameraState.viewMatrix = Matrix4x4::withMatrix3x3AndTranslation(cameraInverseMatrix, cameraInverseTranslation);
+        cameraState.projectionMatrix = Matrix4x4::perspective(60.0, float(cameraState.screenWidth)/float(cameraState.screenHeight), 0.1, 1000.0, device->hasTopLeftNdcOrigin());
+
         // Left drag.
         if(hasLeftDragEvent && !hasHandledLeftDragEvent)
         {
-            float scaleFactor = screenAndUIState.screenScale;
-            screenAndUIState.screenOffsetX += leftDragDeltaX/float(screenAndUIState.screenWidth)*scaleFactor;
-            screenAndUIState.screenOffsetY -= leftDragDeltaY/float(screenAndUIState.screenHeight)*scaleFactor;
         }
 
         // Mouse wheel.
         if(hasWheelEvent && !hasHandledWheelEvent)
         {
-            if(wheelDelta > 0)
-                screenAndUIState.screenScale /= 1.1;
-            else if(wheelDelta < 0)
-                screenAndUIState.screenScale *= 1.1;
         }
 
+        drawString("Test", Vector2{5, 5}, Vector4{1, 0, 0, 1});
+
         // Upload the data buffers.
-        screenAndUIStateUniformBuffer->uploadBufferData(0, sizeof(screenAndUIState), &screenAndUIState);
+        cameraStateUniformBuffer->uploadBufferData(0, sizeof(cameraState), &cameraState);
         uiDataBuffer->uploadBufferData(0, uiElementQuadBuffer.size() * sizeof(UIElementQuad), uiElementQuadBuffer.data());
 
         // Build the command list
@@ -706,7 +664,7 @@ public:
     agpu_sampler_ref sampler;
     agpu_shader_resource_binding_ref samplersBinding;
 
-    agpu_buffer_ref screenAndUIStateUniformBuffer;
+    agpu_buffer_ref cameraStateUniformBuffer;
     agpu_buffer_ref uiDataBuffer;
     agpu_shader_resource_binding_ref dataBinding;
 
@@ -718,7 +676,9 @@ public:
     int bitmapFontGlyphHeight = 9;
     int bitmapFontColumns = 16;
 
-    ScreenAndUIState screenAndUIState;
+    CameraState cameraState;
+    Matrix3x3 cameraMatrix = Matrix3x3::identity();
+    Vector3 cameraTranslation = Vector3{0, 0, 5};
 
     size_t UIElementQuadBufferMaxCapacity = 4192;
     std::vector<UIElementQuad> uiElementQuadBuffer;
