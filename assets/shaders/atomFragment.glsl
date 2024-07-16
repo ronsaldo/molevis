@@ -44,14 +44,15 @@ layout(location=1) in vec3 inViewPosition;
 
 layout(location=0) out vec4 outFragColor;
 
-layout (depth_less) out float gl_FragDepth; // To keep early-z test.
+layout (depth_greater) out float gl_FragDepth; // To keep early-z test.
 
 bool raySphereTest(float sphereRadius, in vec3 sphereCenter, in vec3 rayDirection, out vec2 lambdas)
 {
-    // Ray sphere intersection formula from: https://viclw17.github.io/2018/07/16/raytracing-ray-sphere-intersection/
+    // Ray sphere intersection formula from: https://viclw17.github.io/2018/07/16/raytracing-ray-sphere-intersection
+    vec3 rayOriginSphereCenter = vec3(0.0) - sphereCenter;
     float a = dot(rayDirection, rayDirection);
-    float b = 2.0 * dot(rayDirection, -sphereCenter);
-    float c = dot(sphereCenter, sphereCenter) - sphereRadius*sphereRadius;
+    float b = 2.0 * dot(rayDirection, rayOriginSphereCenter);
+    float c = dot(rayOriginSphereCenter, rayOriginSphereCenter) - sphereRadius*sphereRadius;
     float delta = b*b - 4.0*a*c;
     if (delta < 0.0)
         return false;
@@ -72,8 +73,8 @@ void main()
     vec2 lambdas;
     //raySphereTest(desc.radius, viewCenter, D, lambdas);
     bool inside = raySphereTest(desc.radius, viewCenter, D, lambdas);
-    //if (!inside)
-    //    discard;
+    if (!inside)
+        discard;
 
     // Compute the intersection point.
     vec3 P = D*min(lambdas.x, lambdas.y);
@@ -91,8 +92,8 @@ void main()
     float NdotV = max(0.0, dot(N, V));
 
     outFragColor = vec4(baseColor.rgb*(0.2 + NdotV*0.8), baseColor.a);
-    if (!inside)
-        outFragColor = vec4(1.0, 0.0, 1.0, 1.0);
+    //if (!inside)
+    //    outFragColor = vec4(1.0, 0.0, 1.0, 1.0);
 
     //outFragColor = vec4(N.xyz*0.5 + 0.5, 1.0);
     //outFragColor = vec4(V.xyz*0.5 + 0.5, 1.0);
