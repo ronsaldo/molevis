@@ -671,19 +671,21 @@ public:
         // Left drag.
         if(hasLeftDragEvent && !hasHandledLeftDragEvent)
         {
-            cameraAngle += Vector3(leftDragDeltaY, leftDragDeltaX, 0) * 1.0/M_PI;
+            cameraAngle += Vector3(leftDragDeltaY, leftDragDeltaX, 0) * 0.1/M_PI;
+            cameraAngle.x = std::min(std::max(cameraAngle.x, float(-M_PI*0.5)), float(M_PI*0.5));
         }
+        cameraMatrix = Matrix3x3::XRotation(cameraAngle.x) * Matrix3x3::YRotation(cameraAngle.y);
 
         // Right drag.
         if(hasRightDragEvent && !hasHandledRightDragEvent)
         {
-            cameraTranslation += cameraMatrix * (Vector3(rightDragDeltaX, -rightDragDeltaY, 0) * 0.001f);
+            cameraTranslation += cameraMatrix * (Vector3(rightDragDeltaX, -rightDragDeltaY, 0) * 0.1f);
         }
 
         // Mouse wheel.
         if(hasWheelEvent && !hasHandledWheelEvent)
         {
-            cameraTranslation.z += wheelDelta;
+            cameraTranslation += cameraMatrix * Vector3(0, 0, -wheelDelta);
         }
 
         drawString("Test", Vector2{5, 5}, Vector4{1, 0, 0, 1});
@@ -692,6 +694,7 @@ public:
         auto cameraInverseTranslation = cameraInverseMatrix * -cameraTranslation;
 
         cameraState.viewMatrix = Matrix4x4::withMatrix3x3AndTranslation(cameraInverseMatrix, cameraInverseTranslation);
+        cameraState.inverseViewMatrix = Matrix4x4::withMatrix3x3AndTranslation(cameraMatrix, cameraTranslation);
         cameraState.projectionMatrix = Matrix4x4::perspective(60.0, float(cameraState.screenWidth)/float(cameraState.screenHeight), 0.1, 1000.0, device->hasTopLeftNdcOrigin());
 
         // Upload the data buffers.

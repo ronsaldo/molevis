@@ -14,6 +14,7 @@ struct CameraState
 
     Matrix4x4 projectionMatrix;
     Matrix4x4 viewMatrix;
+    Matrix4x4 inverseViewMatrix;
 };
 
 #endif //MOLLEVIS_CAMERA_STATE_HPP

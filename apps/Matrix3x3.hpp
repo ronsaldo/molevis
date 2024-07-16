@@ -2,6 +2,7 @@
 #define MOLLEVIS_MATRIX3x3_HPP
 
 #include "Vector3.hpp"
+#include <math.h>
 
 struct Matrix3x3
 {
@@ -12,6 +13,28 @@ struct Matrix3x3
             Vector3{0, 1, 0},
             Vector3{0, 0, 1},
         };
+    }
+
+    static Matrix3x3 XRotation(float angle)
+    {
+        float c = cos(angle);
+        float s = sin(angle);
+        return Matrix3x3{{
+            {1, 0, 0},
+            {0, c, s},
+            {0, -s, c}
+        }};
+    }
+
+    static Matrix3x3 YRotation(float angle)
+    {
+        float c = cos(angle);
+        float s = sin(angle);
+        return Matrix3x3{{
+            {c, 0, -s},
+            {0, 1, 0},
+            {s, 0, c}
+        }};
     }
 
     Matrix3x3 transposed() const
@@ -40,7 +63,7 @@ struct Matrix3x3
 
     Matrix3x3 operator*(const Matrix3x3 &o) const
     {
-        Matrix3x3 s = s.transposed();
+        Matrix3x3 s = transposed();
         return Matrix3x3{{
             Vector3{
                 s.columns[0].dot(o.columns[0]),

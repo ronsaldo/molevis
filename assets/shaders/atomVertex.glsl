@@ -9,6 +9,7 @@ layout(std140, set = 1, binding = 0) uniform CameraStateBlock
 
     mat4 projectionMatrix;
     mat4 viewMatrix;
+    mat4 inverseViewMatrix;
 } CameraState;
 
 struct AtomDescription
@@ -52,17 +53,15 @@ void main()
     AtomDescription desc = AtomDescriptionBuffer[gl_InstanceIndex];
     AtomState state = AtomStateBuffer[gl_InstanceIndex];
 
-    // Compute the world bounding box
-    vec3 worldHalfExtent = vec3(desc.radius);
-    vec3 worldBoxCenter = state.position;
-    vec3 worldBoxMin = worldBoxCenter - worldHalfExtent;
-    vec3 worldBoxMax = worldBoxCenter + worldHalfExtent;
+    // Get the atom world position
+    vec3 worldCenter = state.position;
+    
+    // Compute the atom view position center.
+    vec3 viewCenter = (CameraState.viewMatrix * vec4(worldCenter, 1.0)).xyz;
 
     // Compute the view bounding box
-    vec3 viewBoxNeg = (CameraState.viewMatrix * vec4(worldBoxMin, 1.0)).xyz;
-    vec3 viewBoxPos = (CameraState.viewMatrix * vec4(worldBoxMax, 1.0)).xyz;
-    vec3 viewBoxMin = min(viewBoxNeg, viewBoxPos);
-    vec3 viewBoxMax = max(viewBoxNeg, viewBoxPos);
+    vec3 viewBoxMin = viewCenter - desc.radius;
+    vec3 viewBoxMax = viewCenter + desc.radius;
 
     // Compute the extent of the box at the front.
     vec3 viewBoxFrontMin = vec3(viewBoxMin.xy, viewBoxMax.z);
