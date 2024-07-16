@@ -9,7 +9,9 @@ layout(std140, set = 1, binding = 0) uniform CameraStateBlock
     float farDistance;
 
     mat4 projectionMatrix;
+    mat4 inverseProjectionMatrix;
     mat4 viewMatrix;
+    mat4 inverseViewMatrix;
 } CameraState;
 
 struct UIElementQuad

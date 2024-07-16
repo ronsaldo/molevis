@@ -14,6 +14,7 @@ struct CameraState
     float farDistance = 1000.0f;
 
     Matrix4x4 projectionMatrix;
+    Matrix4x4 inverseProjectionMatrix;
     Matrix4x4 viewMatrix;
     Matrix4x4 inverseViewMatrix;
 };

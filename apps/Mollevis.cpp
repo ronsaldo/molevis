@@ -706,6 +706,7 @@ public:
         cameraState.viewMatrix = Matrix4x4::withMatrix3x3AndTranslation(cameraInverseMatrix, cameraInverseTranslation);
         cameraState.inverseViewMatrix = Matrix4x4::withMatrix3x3AndTranslation(cameraMatrix, cameraTranslation);
         cameraState.projectionMatrix = Matrix4x4::perspective(60.0, float(cameraState.screenWidth)/float(cameraState.screenHeight), cameraState.nearDistance, cameraState.farDistance, device->hasTopLeftNdcOrigin());
+        cameraState.inverseProjectionMatrix = cameraState.projectionMatrix.inverse();
 
         // Upload the data buffers.
         cameraStateUniformBuffer->uploadBufferData(0, sizeof(cameraState), &cameraState);

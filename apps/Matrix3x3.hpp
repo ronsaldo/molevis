@@ -46,6 +46,17 @@ struct Matrix3x3
         };
     }
 
+    float determinant() const
+    {
+        return columns[0].x*columns[1].y*columns[2].z
+             + columns[1].x*columns[2].y*columns[0].z
+             + columns[2].x*columns[0].y*columns[1].z
+
+             - columns[0].z*columns[1].y*columns[2].x
+             - columns[1].z*columns[2].y*columns[0].x
+             - columns[2].z*columns[0].y*columns[1].x;
+    }
+
     Matrix3x3 operator+(const Matrix3x3 &o) const
     {
         return Matrix3x3{{columns[0] + o.columns[0], columns[1] + o.columns[1], columns[2] + o.columns[2]}};
