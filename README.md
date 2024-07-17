@@ -7,7 +7,7 @@ For building on Linux the Vulkan header files and the SDL2 development must be i
 For recursive cloning with submodules, the following script can be used:
 
 ```bash
-git clone --recurse https://github.com/ronsaldo/mollevis
+git clone --recursive https://github.com/ronsaldo/mollevis
 ```
 
 The following bash script can be used for building on Linux:
