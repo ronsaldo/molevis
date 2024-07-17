@@ -769,6 +769,7 @@ public:
         commandList->useComputeShaderResources(atomFrontBufferBinding);
         commandList->useComputeShaderResources(atomBoundQuadBufferBinding);
         commandList->dispatchCompute((atomDescriptions.size() + 31)/32, 1, 1);
+        commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_VERTEX_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
 
         commandList->beginRenderPass(mainRenderPass, backBuffer, false);
 
