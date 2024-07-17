@@ -83,6 +83,9 @@ public:
     #endif
         agpu_uint platformIndex = 0;
         agpu_uint gpuIndex = 0;
+        int randomAtomCount = 1000;
+        int randomBondCount = 200;
+
         for (int i = 1; i < argc; ++i)
         {
             std::string arg = argv[i];
@@ -102,9 +105,17 @@ public:
             {
                 debugLayerEnabled = true;
             }
+            else if (arg == "-gen-atoms")
+            {
+                randomAtomCount = atoi(argv[++i]);
+            }
+            else if (arg == "-gen-bonds")
+            {
+                randomBondCount = atoi(argv[++i]);
+            }
         }
 
-        generateRandomDataset(10000, 200);
+        generateRandomDataset(randomAtomCount, randomBondCount);
 
         // Get the platform.
         agpu_uint numPlatforms;
@@ -689,6 +700,9 @@ public:
         {
         case SDLK_ESCAPE:
             isQuitting = true;
+            break;
+        case ' ':
+            isSimulating = !isSimulating;
             break;
         default:
             break;
