@@ -64,6 +64,10 @@ float morsePotentialDerivative(float r, float D, float a, float re)
     return -2.0*a*D*(1.0 - innerExp)*innerExp;
 }
 
+const uint TileSize = 32u;
+shared vec3 tileAtomPositions[TileSize];
+shared vec2 tileAtomCoefficients[TileSize];
+
 void main()
 {
     uint myAtomIndex = gl_GlobalInvocationID.x;
@@ -71,28 +75,44 @@ void main()
     vec3 myNetForce = AtomStateBuffer[myAtomIndex].netForce;
 
     // Lennard-jones potential.
-    for(uint firstAtomIndex = 0u; firstAtomIndex < atomCount; ++firstAtomIndex)
+    for(uint firstAtomTileIndex = 0u; firstAtomTileIndex < atomCount; firstAtomTileIndex += TileSize)
     {
-        uint secondAtomIndex = myAtomIndex;
-        vec3 secondPosition = myAtomPosition;
-
-        if(firstAtomIndex == secondAtomIndex || firstAtomIndex >= atomCount || secondAtomIndex >= atomCount)
-            continue;
-
-        // Fetch the first position and the lennard jones coefficients.
-        vec3 firstPosition = AtomStateBuffer[firstAtomIndex].position;
-        vec2 coefficients = AtomDescriptionBuffer[firstAtomIndex].lennardJonesCoefficients;
-
-        vec3 direction = secondPosition - firstPosition;
-        float dist = length(direction);
-        if(dist > 0.000001)
+        uint fetchTileElementIndex = gl_LocalInvocationID.x;
+        uint fetchAtomIndex = firstAtomTileIndex + fetchTileElementIndex;
+        if(fetchAtomIndex < atomCount)
         {
-            float invDist = 1.0 / dist;
-            direction *= invDist;
-
-            vec3 force = -direction * lennardJonesDerivative(invDist, coefficients.x, coefficients.y);
-            myNetForce += force;
+            tileAtomPositions[fetchTileElementIndex] = AtomStateBuffer[fetchAtomIndex].position;
+            tileAtomCoefficients[fetchTileElementIndex] = AtomDescriptionBuffer[fetchAtomIndex].lennardJonesCoefficients;
         }
+        barrier();
+
+        for(uint tileElementIndex = 0u; tileElementIndex < TileSize; ++tileElementIndex)
+        {
+            uint firstAtomIndex = firstAtomTileIndex + tileElementIndex;
+        
+            uint secondAtomIndex = myAtomIndex;
+            vec3 secondPosition = myAtomPosition;
+
+            if(firstAtomIndex == secondAtomIndex || firstAtomIndex >= atomCount || secondAtomIndex >= atomCount)
+                continue;
+
+            // Fetch the first position and the lennard jones coefficients.
+            vec3 firstPosition = tileAtomPositions[tileElementIndex];
+            vec2 coefficients = tileAtomCoefficients[tileElementIndex];
+
+            vec3 direction = secondPosition - firstPosition;
+            float dist = length(direction);
+            if(dist > 0.000001)
+            {
+                float invDist = 1.0 / dist;
+                direction *= invDist;
+
+                vec3 force = -direction * lennardJonesDerivative(invDist, coefficients.x, coefficients.y);
+                myNetForce += force;
+            }
+        }
+
+        barrier();
     }
 
     // Bond morse potential.
