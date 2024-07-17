@@ -17,6 +17,7 @@ layout(std140, set = 1, binding = 0) uniform CameraStateBlock
 struct ScreenBoundingQuad
 {
     vec3 quadMin;
+    bool inFrustum;
     vec3 quadMax;
 };
 
@@ -37,14 +38,22 @@ const vec2 quadVertices[4] = vec2[4](
 
 void main()
 {
+    // Pass the instance index
+    outAtomIndex = gl_InstanceIndex;
+
     // Fetch the screen quad.
     ScreenBoundingQuad boundingQuad = ScreenBoundingQuadBuffer[gl_InstanceIndex];
+    if (!boundingQuad.inFrustum)
+    {
+        // Clipping by placing outsize the unit box
+        outViewPosition = vec3(0.0);
+        gl_Position = vec4(10.0, 10.0, 10.0, 1.0);
+        return;
+    }
+
     vec3 viewBoxMin = boundingQuad.quadMin;
     vec3 viewBoxMax = boundingQuad.quadMax;
     vec3 viewBoxExtent = viewBoxMax - viewBoxMin;
-
-    // Pass the instance index
-    outAtomIndex = gl_InstanceIndex;
 
     // Compute the quad view position,
     vec2 quadCoord = quadVertices[gl_VertexIndex];

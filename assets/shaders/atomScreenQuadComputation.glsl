@@ -32,6 +32,7 @@ struct AtomState
 struct ScreenBoundingQuad
 {
     vec3 quadMin;
+    bool inFrustum;
     vec3 quadMax;
 };
 
@@ -118,15 +119,22 @@ void main()
     float radius = desc.radius;
     vec3 viewCenter = (CameraState.viewMatrix * vec4(worldCenter, 1.0)).xyz;
 
-    // Compute the extent of the box at the front.
-    vec3 viewBoxFrontMin;
-    vec3 viewBoxFrontMax;
-    computeBoundingQuadForViewSphere(viewCenter, radius, viewBoxFrontMin, viewBoxFrontMax);
-
-    // Emit the bounding quad
+    // Only accept spheres that are completely in front of the near plane.
+    bool inFrontOfNearPlane = viewCenter.z + radius < -CameraState.nearDistance;
     ScreenBoundingQuad boundingQuad;
-    boundingQuad.quadMin = viewBoxFrontMin;
-    boundingQuad.quadMax = viewBoxFrontMax;
+    boundingQuad.inFrustum = inFrontOfNearPlane;
+
+    if(inFrontOfNearPlane)
+    {
+        // Compute the extent of the box at the front.
+        vec3 viewBoxFrontMin;
+        vec3 viewBoxFrontMax;
+        computeBoundingQuadForViewSphere(viewCenter, radius, viewBoxFrontMin, viewBoxFrontMax);
+
+        // Emit the bounding quad
+        boundingQuad.quadMin = viewBoxFrontMin;
+        boundingQuad.quadMax = viewBoxFrontMax;
+    }
 
     ScreenBoundingQuadBuffer[atomIndex] = boundingQuad;
 }
