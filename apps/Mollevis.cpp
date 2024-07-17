@@ -9,6 +9,7 @@
 #include "Vector3.hpp"
 #include "Vector4.hpp"
 #include "Matrix4x4.hpp"
+#include "PushConstants.hpp"
 #include <stdint.h>
 #include <stdio.h>
 #include <memory>
@@ -102,6 +103,8 @@ public:
                 debugLayerEnabled = true;
             }
         }
+
+        generateRandomDataset(1000, 200);
 
         // Get the platform.
         agpu_uint numPlatforms;
@@ -249,6 +252,7 @@ public:
             builder->beginBindingBank(2);
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Bounding Quad Buffer
 
+            builder->addBindingConstant(); // Timestep
             builder->addBindingConstant(); // Atom count
             builder->addBindingConstant(); // Bond count
 
@@ -310,43 +314,6 @@ public:
             bitmapFontInverseHeight = 1.0 / desc.height;
         }
 
-        // Generate atoms and bonds
-        {
-            Random rand;
-            size_t AtomsToGenerate = 1000;
-            size_t BondsToGenerate = 200;
-            atomDescriptions.reserve(AtomsToGenerate);
-            initialAtomStates.reserve(AtomsToGenerate);
-
-            for(size_t i = 0; i < AtomsToGenerate; ++i)
-            {
-                auto description = AtomDescription{};
-                auto state = AtomState{};
-
-                description.radius = rand.randFloat(0.5, 2);
-                description.color = rand.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
-                state.position = rand.randVector3(-100, 100);
-
-                atomDescriptions.push_back(description);
-                initialAtomStates.push_back(state);
-            }
-
-            for(size_t i = 0; i < BondsToGenerate; ++i)
-            {
-                auto firstAtomIndex = rand.randUInt(atomDescriptions.size());
-                auto secondAtomIndex = firstAtomIndex;
-                while(firstAtomIndex == secondAtomIndex)
-                    secondAtomIndex = rand.randUInt(atomDescriptions.size());
-
-                auto description = AtomBondDescription{};
-                description.firstAtomIndex = firstAtomIndex;
-                description.secondAtomIndex = secondAtomIndex;
-                description.thickness = rand.randFloat(0.1, 0.4);
-                description.color = rand.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
-                atomBondDescriptions.push_back(description);
-            }
-        }
-
         // Atom description buffer
         {
             agpu_buffer_description desc = {};
@@ -396,6 +363,7 @@ public:
 
         atomBackBufferBinding = shaderSignature->createShaderResourceBinding(2);
         atomBackBufferBinding->bindStorageBuffer(0, atomDescriptionBuffer);
+        atomBackBufferBinding->bindStorageBuffer(1, atomBondDescriptionBuffer);
         atomBackBufferBinding->bindStorageBuffer(2, atomStateBackBuffer);
         atomBackBufferBinding->bindStorageBuffer(3, atomStateFrontBuffer);
 
@@ -416,14 +384,13 @@ public:
             atomBoundQuadBufferBinding->bindStorageBuffer(0, atomBoundQuadBuffer);
         }
 
+        // Simulation pipelines
+        simulationResetTimeStepPipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/simulationResetTimeStep.glsl");
+        simulationLennardJonesPipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/simulationLennardJones.glsl");
+        simulationIntegratePipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/simulationIntegrate.glsl");
+
         // Atom screen quad computation shader
-        atomScreenQuadComputationShader = compileShaderWithSourceFile("assets/shaders/atomScreenQuadComputation.glsl", AGPU_COMPUTE_SHADER);
-        {
-            auto builder = device->createComputePipelineBuilder();
-            builder->setShaderSignature(shaderSignature);
-            builder->attachShader(atomScreenQuadComputationShader);
-            atomScreenQuadBufferComputationPipeline = finishBuildingComputePipeline(builder);
-        }
+        atomScreenQuadBufferComputationPipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/atomScreenQuadComputation.glsl");
 
         // Atom and bond draw pipeline state.
         screenBoundQuadVertex = compileShaderWithSourceFile("assets/shaders/screenBoundQuadVertex.glsl", AGPU_VERTEX_SHADER);
@@ -510,6 +477,45 @@ public:
         return 0;
     }
 
+    void generateRandomDataset(size_t atomsToGenerate, size_t bondsToGenerate)
+    {
+        Random rand;
+        atomDescriptions.reserve(atomsToGenerate);
+        initialAtomStates.reserve(atomsToGenerate);
+
+        for(size_t i = 0; i < atomsToGenerate; ++i)
+        {
+            auto description = AtomDescription{};
+            auto state = AtomState{};
+
+            description.lennardJonesEpsilon = rand.randFloat(1, 5);
+            description.lennardJonesSigma = rand.randFloat(1, 5);
+            description.radius = rand.randFloat(0.5, 2);
+            description.color = rand.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
+            state.position = rand.randVector3(-100, 100);
+
+            atomDescriptions.push_back(description);
+            initialAtomStates.push_back(state);
+        }
+
+        for(size_t i = 0; i < bondsToGenerate; ++i)
+        {
+            auto firstAtomIndex = rand.randUInt(atomDescriptions.size());
+            auto secondAtomIndex = firstAtomIndex;
+            while(firstAtomIndex == secondAtomIndex)
+                secondAtomIndex = rand.randUInt(atomDescriptions.size());
+
+            auto description = AtomBondDescription{};
+            description.firstAtomIndex = firstAtomIndex;
+            description.secondAtomIndex = secondAtomIndex;
+            description.morseEquilibriumDistance = rand.randFloat(5, 20);
+            description.morseWellDepth = 1;
+            description.thickness = rand.randFloat(0.1, 0.4);
+            description.color = rand.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
+            atomBondDescriptions.push_back(description);
+        }
+    }
+
     std::string readWholeFile(const std::string &fileName)
     {
         FILE *file = fopen(fileName.c_str(), "rb");
@@ -572,6 +578,15 @@ public:
             fprintf(stderr, "Failed to build pipeline.\n");
         }
         return pipeline;
+    }
+
+    agpu_pipeline_state_ref compileAndBuildComputeShaderPipelineWithSourceFile(const std::string &filename)
+    {
+        auto shader = compileShaderWithSourceFile(filename, AGPU_COMPUTE_SHADER);
+        auto builder = device->createComputePipelineBuilder();
+        builder->setShaderSignature(shaderSignature);
+        builder->attachShader(shader);
+        return finishBuildingComputePipeline(builder);
     }
 
     agpu_pipeline_state_ref finishBuildingComputePipeline(const agpu_compute_pipeline_builder_ref &builder)
@@ -764,6 +779,30 @@ public:
         currentLayoutY = currentLayoutRowY;
     }
 
+    void emitSimulationStepCommands()
+    {
+        // Reset the simulation time step.
+        commandList->usePipelineState(simulationResetTimeStepPipeline);
+        commandList->dispatchCompute((initialAtomStates.size() + 31)/32, 1, 1);
+        commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
+
+        // Accumulate the lennard jones potential energy.
+        commandList->usePipelineState(simulationLennardJonesPipeline);
+        commandList->dispatchCompute((initialAtomStates.size() + 31)/32, 1, 1);
+        commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
+
+        // Integrate simulation time step.
+        commandList->usePipelineState(simulationIntegratePipeline);
+        commandList->dispatchCompute((initialAtomStates.size() + 31)/32, 1, 1);
+        commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
+
+        // Swap the back buffer with the front buffer.
+        std::swap(atomBackBufferBinding, atomFrontBufferBinding);
+        commandList->useComputeShaderResources(atomFrontBufferBinding);
+
+        ++simulationIteration;
+    }
+
     void updateAndRender(float delta)
     {
         uiElementQuadBuffer.clear();
@@ -789,7 +828,7 @@ public:
         }
 
         char buffer[64];
-        snprintf(buffer, sizeof(buffer), "%d Atoms. %d Bonds. Update time %0.3f ms.", int(atomDescriptions.size()), int(atomBondDescriptions.size()), delta*1000.0);
+        snprintf(buffer, sizeof(buffer), "%d Atoms. %d Bonds. Sim iter %05d. Update time %0.3f ms.", int(atomDescriptions.size()), int(atomBondDescriptions.size()), simulationIteration, delta*1000.0);
         drawString(buffer, Vector2{5, 5}, Vector4{0.1, 1.0, 0.1, 1});
 
         auto cameraInverseMatrix = cameraMatrix.transposed();
@@ -799,6 +838,11 @@ public:
         cameraState.inverseViewMatrix = Matrix4x4::withMatrix3x3AndTranslation(cameraMatrix, cameraTranslation);
         cameraState.projectionMatrix = Matrix4x4::perspective(60.0, float(cameraState.screenWidth)/float(cameraState.screenHeight), cameraState.nearDistance, cameraState.farDistance, device->hasTopLeftNdcOrigin());
         cameraState.inverseProjectionMatrix = cameraState.projectionMatrix.inverse();
+
+        PushConstants pushConstants = {};
+        pushConstants.atomCount = atomDescriptions.size();
+        pushConstants.bondCount = atomBondDescriptions.size();
+        pushConstants.timeStep = simulationTimeStep;
 
         // Upload the data buffers.
         cameraStateUniformBuffer->uploadBufferData(0, sizeof(cameraState), &cameraState);
@@ -815,6 +859,18 @@ public:
         commandList->useComputeShaderResources(screenStateBinding);
         commandList->useComputeShaderResources(atomFrontBufferBinding);
         commandList->useComputeShaderResources(atomBoundQuadBufferBinding);
+        commandList->pushConstants(0, sizeof(pushConstants), &pushConstants);
+
+        // Are we simulating?
+        if(isSimulating)
+        {
+            accumulatedTimeToSimulate += delta;
+            if(accumulatedTimeToSimulate >= simulationTimeStep)
+            {
+                emitSimulationStepCommands();
+                accumulatedTimeToSimulate = 0;
+            }
+        }
 
         // Screen bounding quad computations.
         commandList->usePipelineState(atomScreenQuadBufferComputationPipeline);
@@ -935,7 +991,6 @@ public:
     agpu_shader_ref bondDrawFragment;
     agpu_pipeline_state_ref bondDrawPipeline;
 
-    agpu_shader_ref atomScreenQuadComputationShader;
     agpu_buffer_ref atomBoundQuadBuffer;
     agpu_pipeline_state_ref atomScreenQuadBufferComputationPipeline;
     agpu_shader_resource_binding_ref atomBoundQuadBufferBinding;
@@ -949,6 +1004,10 @@ public:
     agpu_buffer_ref atomStateBackBuffer;
     agpu_shader_resource_binding_ref atomFrontBufferBinding;
     agpu_shader_resource_binding_ref atomBackBufferBinding;
+
+    agpu_pipeline_state_ref simulationResetTimeStepPipeline;
+    agpu_pipeline_state_ref simulationLennardJonesPipeline;
+    agpu_pipeline_state_ref simulationIntegratePipeline;
 
     agpu_texture_ref bitmapFont;
     float bitmapFontScale = 1.5;
@@ -965,6 +1024,11 @@ public:
 
     size_t UIElementQuadBufferMaxCapacity = 4192;
     std::vector<UIElementQuad> uiElementQuadBuffer;
+
+    bool isSimulating = true;
+    float simulationTimeStep = 1.0f/60.0f;
+    float accumulatedTimeToSimulate = 0.0f;
+    int simulationIteration = 0;
 
     bool hasWheelEvent = false;
     bool hasHandledWheelEvent = false;
