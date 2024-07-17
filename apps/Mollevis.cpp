@@ -240,6 +240,12 @@ public:
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Atom Front State Buffer
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Atom Back State Buffer
 
+            builder->beginBindingBank(2);
+            builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Bounding Quad Buffer
+
+            builder->addBindingConstant(); // Atom count
+            builder->addBindingConstant(); // Bond count
+
             shaderSignature = builder->build();
             if(!shaderSignature)
                 return 1;
@@ -323,7 +329,7 @@ public:
         {
             agpu_buffer_description desc = {};
             desc.size = (sizeof(AtomDescription)*std::max(atomDescriptions.size(), size_t(1024)) + 255) & (-256);
-            desc.heap_type = AGPU_MEMORY_HEAP_TYPE_HOST_TO_DEVICE;
+            desc.heap_type = AGPU_MEMORY_HEAP_TYPE_DEVICE_LOCAL;
             desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_STORAGE_BUFFER);
             desc.main_usage_mode = AGPU_STORAGE_BUFFER;
 	        desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
@@ -335,7 +341,7 @@ public:
         {
             agpu_buffer_description desc = {};
             desc.size = (sizeof(AtomState)*std::max(initialAtomStates.size(), size_t(1024)) + 255) & (-256);
-            desc.heap_type = AGPU_MEMORY_HEAP_TYPE_HOST_TO_DEVICE;
+            desc.heap_type = AGPU_MEMORY_HEAP_TYPE_DEVICE_LOCAL;
             desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_STORAGE_BUFFER);
             desc.main_usage_mode = AGPU_STORAGE_BUFFER;
 	        desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
@@ -358,9 +364,37 @@ public:
         atomBackBufferBinding->bindStorageBuffer(2, atomStateBackBuffer);
         atomBackBufferBinding->bindStorageBuffer(3, atomStateFrontBuffer);
 
+        // Atom bounding quad buffer
+        {
+            agpu_buffer_description desc = {};
+            size_t requiredCapacity = std::max(atomDescriptions.size(), size_t(1024));
+            requiredCapacity = (requiredCapacity + 31) / 32 * 32;
+
+            desc.size = (32*requiredCapacity + 255) & (-256);
+            desc.heap_type = AGPU_MEMORY_HEAP_TYPE_DEVICE_LOCAL;
+            desc.usage_modes = agpu_buffer_usage_mask(AGPU_STORAGE_BUFFER);
+            desc.main_usage_mode = AGPU_STORAGE_BUFFER;
+
+            atomBoundQuadBuffer = device->createBuffer(&desc, nullptr);
+
+            atomBoundQuadBufferBinding = shaderSignature->createShaderResourceBinding(3);
+            atomBoundQuadBufferBinding->bindStorageBuffer(0, atomBoundQuadBuffer);
+        }
+
+        // Atom screen quad computation shader
+        atomScreenQuadComputationShader = compileShaderWithSourceFile("assets/shaders/atomScreenQuadComputation.glsl", AGPU_COMPUTE_SHADER);
+        {
+            auto builder = device->createComputePipelineBuilder();
+            builder->setShaderSignature(shaderSignature);
+            builder->attachShader(atomScreenQuadComputationShader);
+            atomScreenQuadBufferComputationPipeline = finishBuildingComputePipeline(builder);
+        }
+
         // Atom draw pipeline state.
         atomDrawVertex = compileShaderWithSourceFile("assets/shaders/atomVertex.glsl", AGPU_VERTEX_SHADER);
         atomDrawFragment = compileShaderWithSourceFile("assets/shaders/atomFragment.glsl", AGPU_FRAGMENT_SHADER);
+        if(!atomDrawVertex | !atomDrawFragment)
+            return 1;
 
         {
             auto builder = device->createPipelineBuilder();
@@ -375,10 +409,10 @@ public:
         }
 
         // Data binding
-        uiBinding = shaderSignature->createShaderResourceBinding(1);
-        uiBinding->bindUniformBuffer(0, cameraStateUniformBuffer);
-        uiBinding->bindStorageBuffer(1, uiDataBuffer);
-        uiBinding->bindSampledTextureView(2, bitmapFont->getOrCreateFullView());
+        screenStateBinding = shaderSignature->createShaderResourceBinding(1);
+        screenStateBinding->bindUniformBuffer(0, cameraStateUniformBuffer);
+        screenStateBinding->bindStorageBuffer(1, uiDataBuffer);
+        screenStateBinding->bindSampledTextureView(2, bitmapFont->getOrCreateFullView());
 
         // UI pipeline state.
         uiElementVertex = compileShaderWithSourceFile("assets/shaders/uiElementVertex.glsl", AGPU_VERTEX_SHADER);
@@ -483,6 +517,16 @@ public:
     }
 
     agpu_pipeline_state_ref finishBuildingPipeline(const agpu_pipeline_builder_ref &builder)
+    {
+        auto pipeline = builder->build();
+        if(!pipeline)
+        {
+            fprintf(stderr, "Failed to build pipeline.\n");
+        }
+        return pipeline;
+    }
+
+    agpu_pipeline_state_ref finishBuildingComputePipeline(const agpu_compute_pipeline_builder_ref &builder)
     {
         auto pipeline = builder->build();
         if(!pipeline)
@@ -719,6 +763,13 @@ public:
         auto backBuffer = swapChain->getCurrentBackBuffer();
 
         commandList->setShaderSignature(shaderSignature);
+        commandList->usePipelineState(atomScreenQuadBufferComputationPipeline);
+        commandList->useComputeShaderResources(samplersBinding);
+        commandList->useComputeShaderResources(screenStateBinding);
+        commandList->useComputeShaderResources(atomFrontBufferBinding);
+        commandList->useComputeShaderResources(atomBoundQuadBufferBinding);
+        commandList->dispatchCompute((atomDescriptions.size() + 31)/32, 1, 1);
+
         commandList->beginRenderPass(mainRenderPass, backBuffer, false);
 
         commandList->setViewport(0, 0, displayWidth, displayHeight);
@@ -727,8 +778,9 @@ public:
         // Atoms
         commandList->usePipelineState(atomDrawPipeline);
         commandList->useShaderResources(samplersBinding);
-        commandList->useShaderResources(uiBinding);
+        commandList->useShaderResources(screenStateBinding);
         commandList->useShaderResources(atomFrontBufferBinding);
+        commandList->useShaderResources(atomBoundQuadBufferBinding);
         commandList->drawArrays(4, atomDescriptions.size(), 0, 0);
 
         // UI element pipeline
@@ -818,11 +870,16 @@ public:
 
     agpu_buffer_ref cameraStateUniformBuffer;
     agpu_buffer_ref uiDataBuffer;
-    agpu_shader_resource_binding_ref uiBinding;
+    agpu_shader_resource_binding_ref screenStateBinding;
 
     agpu_shader_ref atomDrawVertex;
     agpu_shader_ref atomDrawFragment;
     agpu_pipeline_state_ref atomDrawPipeline;
+
+    agpu_shader_ref atomScreenQuadComputationShader;
+    agpu_buffer_ref atomBoundQuadBuffer;
+    agpu_pipeline_state_ref atomScreenQuadBufferComputationPipeline;
+    agpu_shader_resource_binding_ref atomBoundQuadBufferBinding;
 
     std::vector<AtomDescription> atomDescriptions; 
     std::vector<AtomState> initialAtomStates;
