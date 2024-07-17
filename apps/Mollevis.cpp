@@ -104,7 +104,7 @@ public:
             }
         }
 
-        generateRandomDataset(1000, 200);
+        generateRandomDataset(10000, 200);
 
         // Get the platform.
         agpu_uint numPlatforms;
@@ -188,6 +188,8 @@ public:
             fprintf(stderr, "Failed to open the device\n");
             return false;
         }
+
+        printf("Choosen device: %s\n", device->getName());
 
         // Get the default command queue
         commandQueue = device->getDefaultCommandQueue();
@@ -386,7 +388,7 @@ public:
 
         // Simulation pipelines
         simulationResetTimeStepPipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/simulationResetTimeStep.glsl");
-        simulationLennardJonesPipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/simulationLennardJones.glsl");
+        simulationBodiesPipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/simulationBodies.glsl");
         simulationIntegratePipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/simulationIntegrate.glsl");
 
         // Atom screen quad computation shader
@@ -510,6 +512,7 @@ public:
             description.secondAtomIndex = secondAtomIndex;
             description.morseEquilibriumDistance = rand.randFloat(5, 20);
             description.morseWellDepth = 1;
+            description.morseWellWidth = 1;
             description.thickness = rand.randFloat(0.1, 0.4);
             description.color = rand.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
             atomBondDescriptions.push_back(description);
@@ -787,7 +790,7 @@ public:
         commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
 
         // Accumulate the lennard jones potential energy.
-        commandList->usePipelineState(simulationLennardJonesPipeline);
+        commandList->usePipelineState(simulationBodiesPipeline);
         commandList->dispatchCompute((initialAtomStates.size() + 31)/32, 1, 1);
         commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
 
@@ -1006,7 +1009,7 @@ public:
     agpu_shader_resource_binding_ref atomBackBufferBinding;
 
     agpu_pipeline_state_ref simulationResetTimeStepPipeline;
-    agpu_pipeline_state_ref simulationLennardJonesPipeline;
+    agpu_pipeline_state_ref simulationBodiesPipeline;
     agpu_pipeline_state_ref simulationIntegratePipeline;
 
     agpu_texture_ref bitmapFont;

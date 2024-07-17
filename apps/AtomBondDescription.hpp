@@ -10,6 +10,7 @@ struct AtomBondDescription
     uint32_t secondAtomIndex;
     float morseEquilibriumDistance;
     float morseWellDepth;
+    float morseWellWidth;
     float thickness;
     Vector4 color;
 };

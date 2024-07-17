@@ -20,6 +20,7 @@ struct AtomBondDesc
     uint secondAtomIndex;
     float morseEquilibriumDistance;
     float morseWellDepth;
+    float morseWellWidth;
     float thickness;
     vec4 color;
 };

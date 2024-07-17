@@ -20,6 +20,7 @@ struct AtomBondDesc
     uint secondAtomIndex;
     float morseEquilibriumDistance;
     float morseWellDepth;
+    float morseWellWidth;
     float thickness;
     vec4 color;
 };
@@ -45,8 +46,6 @@ layout(location=0) flat in uint inBondIndex;
 layout(location=1) in vec3 inViewPosition;
 
 layout(location=0) out vec4 outFragColor;
-
-//layout (depth_less) out float gl_FragDepth; // To keep early-z test.
 
 // Capsule SDF from https://iquilezles.org/articles/distfunctions/ 
 float sdfCapsule( vec3 p, vec3 a, vec3 b, float r )
