@@ -113,6 +113,10 @@ public:
             {
                 randomBondCount = atoi(argv[++i]);
             }
+            else if (arg == "-paused")
+            {
+                isSimulating = false;
+            }
         }
 
         generateRandomDataset(randomAtomCount, randomBondCount);
@@ -847,7 +851,7 @@ public:
         }
 
         char buffer[64];
-        snprintf(buffer, sizeof(buffer), "%d Atoms. %d Bonds. Sim iter %05d. Update time %0.3f ms.", int(atomDescriptions.size()), int(atomBondDescriptions.size()), simulationIteration, delta*1000.0);
+        snprintf(buffer, sizeof(buffer), "%d Atoms. %d Bonds. Sim iter %05d. Frame time %0.3f ms.", int(atomDescriptions.size()), int(atomBondDescriptions.size()), simulationIteration, delta*1000.0);
         drawString(buffer, Vector2{5, 5}, Vector4{0.1, 1.0, 0.1, 1});
 
         auto cameraInverseMatrix = cameraMatrix.transposed();
