@@ -717,7 +717,9 @@ public:
 
     void onMouseMotion(const SDL_MouseMotionEvent &event)
     {
-        if(event.state & SDL_BUTTON_LMASK)
+        bool hasCtrlDown = SDL_GetModState() & KMOD_CTRL;
+
+        if((event.state & SDL_BUTTON_LMASK) && !hasCtrlDown)
         {
             hasLeftDragEvent = true;
             leftDragStartX = event.x;
@@ -726,7 +728,7 @@ public:
             leftDragDeltaY = event.yrel;
         }
 
-        if(event.state & SDL_BUTTON_RMASK)
+        if((event.state & SDL_BUTTON_RMASK) || ((event.state & SDL_BUTTON_LMASK) && hasCtrlDown))
         {
             hasRightDragEvent = true;
             rightDragStartX = event.x;
