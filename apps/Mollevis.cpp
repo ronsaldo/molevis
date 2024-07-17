@@ -464,6 +464,8 @@ public:
             uiPipeline = finishBuildingPipeline(builder);
         }
 
+        cameraState.flipVertically = device->hasTopLeftNdcOrigin() == device->hasBottomLeftTextureCoordinates();
+
         // Create the command allocator and command list
         commandAllocator = device->createCommandAllocator(AGPU_COMMAND_LIST_TYPE_DIRECT, commandQueue);
         commandList = device->createCommandList(AGPU_COMMAND_LIST_TYPE_DIRECT, commandAllocator, nullptr);
