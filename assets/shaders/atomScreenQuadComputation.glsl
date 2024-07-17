@@ -88,7 +88,7 @@ void computeBoundingQuadForViewBoundingBox(vec3 viewBoundMin, vec3 viewBoundMax,
         projectedMax = max(projectedMax, projectedPoint);
     }
 
-    float projectedCornerDepth = projectedMin.z;
+    float projectedCornerDepth = projectedMax.z;
     vec3 projectedCornerMin = vec3(projectedMin.xy, projectedCornerDepth);
     vec3 projectedCornerMax = vec3(projectedMax.xy, projectedCornerDepth);
 

@@ -1,6 +1,7 @@
 #include "SDL.h"
 #include "SDL_syswm.h"
 #include "AGPU/agpu.hpp"
+#include "AtomBondDescription.hpp"
 #include "AtomDescription.hpp"
 #include "AtomState.hpp"
 #include "CameraState.hpp"
@@ -56,6 +57,11 @@ struct Random
     Vector4 randVector4(const Vector4 &min, const Vector4 &max)
     {
         return Vector4{randFloat(min.x, max.x), randFloat(min.y, max.y), randFloat(min.z, max.z), randFloat(min.w, max.w)};
+    }
+
+    uint32_t randUInt(uint32_t max)
+    {
+        return rand() % max;
     }
 
     std::mt19937 rand;
@@ -304,14 +310,15 @@ public:
             bitmapFontInverseHeight = 1.0 / desc.height;
         }
 
-        // Generate 1000 atoms
+        // Generate atoms and bonds
         {
             Random rand;
-            size_t AmountToGenerate = 1000;
-            atomDescriptions.reserve(AmountToGenerate);
-            initialAtomStates.reserve(AmountToGenerate);
+            size_t AtomsToGenerate = 1000;
+            size_t BondsToGenerate = 200;
+            atomDescriptions.reserve(AtomsToGenerate);
+            initialAtomStates.reserve(AtomsToGenerate);
 
-            for(size_t i = 0; i < AmountToGenerate; ++i)
+            for(size_t i = 0; i < AtomsToGenerate; ++i)
             {
                 auto description = AtomDescription{};
                 auto state = AtomState{};
@@ -322,6 +329,21 @@ public:
 
                 atomDescriptions.push_back(description);
                 initialAtomStates.push_back(state);
+            }
+
+            for(size_t i = 0; i < BondsToGenerate; ++i)
+            {
+                auto firstAtomIndex = rand.randUInt(atomDescriptions.size());
+                auto secondAtomIndex = firstAtomIndex;
+                while(firstAtomIndex == secondAtomIndex)
+                    secondAtomIndex = rand.randUInt(atomDescriptions.size());
+
+                auto description = AtomBondDescription{};
+                description.firstAtomIndex = firstAtomIndex;
+                description.secondAtomIndex = secondAtomIndex;
+                description.thickness = rand.randFloat(0.1, 0.4);
+                description.color = rand.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
+                atomBondDescriptions.push_back(description);
             }
         }
 
@@ -335,6 +357,18 @@ public:
 	        desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
             atomDescriptionBuffer = device->createBuffer(&desc, nullptr);
             atomDescriptionBuffer->uploadBufferData(0, sizeof(AtomDescription)*atomDescriptions.size(), atomDescriptions.data());
+        }
+
+        // Atom bond description buffer
+        {
+            agpu_buffer_description desc = {};
+            desc.size = (sizeof(AtomBondDescription)*std::max(atomBondDescriptions.size(), size_t(1024)) + 255) & (-256);
+            desc.heap_type = AGPU_MEMORY_HEAP_TYPE_DEVICE_LOCAL;
+            desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_STORAGE_BUFFER);
+            desc.main_usage_mode = AGPU_STORAGE_BUFFER;
+	        desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
+            atomBondDescriptionBuffer = device->createBuffer(&desc, nullptr);
+            atomBondDescriptionBuffer->uploadBufferData(0, sizeof(AtomBondDescription)*atomBondDescriptions.size(), atomBondDescriptions.data());
         }
 
         // Atom state buffers
@@ -356,6 +390,7 @@ public:
 
         atomFrontBufferBinding = shaderSignature->createShaderResourceBinding(2);
         atomFrontBufferBinding->bindStorageBuffer(0, atomDescriptionBuffer);
+        atomFrontBufferBinding->bindStorageBuffer(1, atomBondDescriptionBuffer);
         atomFrontBufferBinding->bindStorageBuffer(2, atomStateFrontBuffer);
         atomFrontBufferBinding->bindStorageBuffer(3, atomStateBackBuffer);
 
@@ -390,10 +425,12 @@ public:
             atomScreenQuadBufferComputationPipeline = finishBuildingComputePipeline(builder);
         }
 
-        // Atom draw pipeline state.
-        atomDrawVertex = compileShaderWithSourceFile("assets/shaders/atomVertex.glsl", AGPU_VERTEX_SHADER);
+        // Atom and bond draw pipeline state.
+        screenBoundQuadVertex = compileShaderWithSourceFile("assets/shaders/screenBoundQuadVertex.glsl", AGPU_VERTEX_SHADER);
         atomDrawFragment = compileShaderWithSourceFile("assets/shaders/atomFragment.glsl", AGPU_FRAGMENT_SHADER);
-        if(!atomDrawVertex | !atomDrawFragment)
+        bondDrawVertex = compileShaderWithSourceFile("assets/shaders/bondVertex.glsl", AGPU_VERTEX_SHADER);
+        bondDrawFragment = compileShaderWithSourceFile("assets/shaders/bondFragment.glsl", AGPU_FRAGMENT_SHADER);
+        if(!screenBoundQuadVertex || !atomDrawFragment || !bondDrawVertex || !bondDrawFragment)
             return 1;
 
         {
@@ -401,13 +438,24 @@ public:
             builder->setRenderTargetFormat(0, colorBufferFormat);
             builder->setDepthStencilFormat(depthBufferFormat);
             builder->setShaderSignature(shaderSignature);
-            builder->attachShader(atomDrawVertex);
+            builder->attachShader(screenBoundQuadVertex);
             builder->attachShader(atomDrawFragment);
             builder->setPrimitiveType(AGPU_TRIANGLE_STRIP);
             builder->setDepthState(true, true, AGPU_GREATER_EQUAL);
             atomDrawPipeline = finishBuildingPipeline(builder);
         }
 
+        {
+            auto builder = device->createPipelineBuilder();
+            builder->setRenderTargetFormat(0, colorBufferFormat);
+            builder->setDepthStencilFormat(depthBufferFormat);
+            builder->setShaderSignature(shaderSignature);
+            builder->attachShader(bondDrawVertex);
+            builder->attachShader(bondDrawFragment);
+            builder->setPrimitiveType(AGPU_TRIANGLE_STRIP);
+            builder->setDepthState(true, true, AGPU_GREATER_EQUAL);
+            bondDrawPipeline = finishBuildingPipeline(builder);
+        }
         // Data binding
         screenStateBinding = shaderSignature->createShaderResourceBinding(1);
         screenStateBinding->bindUniformBuffer(0, cameraStateUniformBuffer);
@@ -741,7 +789,7 @@ public:
         }
 
         char buffer[64];
-        snprintf(buffer, sizeof(buffer), "Update time %0.3f ms", delta*1000.0);
+        snprintf(buffer, sizeof(buffer), "%d Atoms. %d Bonds. Update time %0.3f ms.", int(atomDescriptions.size()), int(atomBondDescriptions.size()), delta*1000.0);
         drawString(buffer, Vector2{5, 5}, Vector4{0.1, 1.0, 0.1, 1});
 
         auto cameraInverseMatrix = cameraMatrix.transposed();
@@ -763,11 +811,13 @@ public:
         auto backBuffer = swapChain->getCurrentBackBuffer();
 
         commandList->setShaderSignature(shaderSignature);
-        commandList->usePipelineState(atomScreenQuadBufferComputationPipeline);
         commandList->useComputeShaderResources(samplersBinding);
         commandList->useComputeShaderResources(screenStateBinding);
         commandList->useComputeShaderResources(atomFrontBufferBinding);
         commandList->useComputeShaderResources(atomBoundQuadBufferBinding);
+
+        // Screen bounding quad computations.
+        commandList->usePipelineState(atomScreenQuadBufferComputationPipeline);
         commandList->dispatchCompute((atomDescriptions.size() + 31)/32, 1, 1);
         commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_VERTEX_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
 
@@ -783,6 +833,10 @@ public:
         commandList->useShaderResources(atomFrontBufferBinding);
         commandList->useShaderResources(atomBoundQuadBufferBinding);
         commandList->drawArrays(4, atomDescriptions.size(), 0, 0);
+
+        // Bonds
+        commandList->usePipelineState(bondDrawPipeline);
+        commandList->drawArrays(4, atomBondDescriptions.size(), 0, 0);
 
         // UI element pipeline
         commandList->usePipelineState(uiPipeline);
@@ -873,9 +927,13 @@ public:
     agpu_buffer_ref uiDataBuffer;
     agpu_shader_resource_binding_ref screenStateBinding;
 
-    agpu_shader_ref atomDrawVertex;
+    agpu_shader_ref screenBoundQuadVertex;
     agpu_shader_ref atomDrawFragment;
     agpu_pipeline_state_ref atomDrawPipeline;
+
+    agpu_shader_ref bondDrawVertex;
+    agpu_shader_ref bondDrawFragment;
+    agpu_pipeline_state_ref bondDrawPipeline;
 
     agpu_shader_ref atomScreenQuadComputationShader;
     agpu_buffer_ref atomBoundQuadBuffer;
@@ -883,8 +941,10 @@ public:
     agpu_shader_resource_binding_ref atomBoundQuadBufferBinding;
 
     std::vector<AtomDescription> atomDescriptions; 
+    std::vector<AtomBondDescription> atomBondDescriptions; 
     std::vector<AtomState> initialAtomStates;
     agpu_buffer_ref atomDescriptionBuffer;
+    agpu_buffer_ref atomBondDescriptionBuffer;
     agpu_buffer_ref atomStateFrontBuffer;
     agpu_buffer_ref atomStateBackBuffer;
     agpu_shader_resource_binding_ref atomFrontBufferBinding;

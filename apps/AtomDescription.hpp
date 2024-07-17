@@ -7,8 +7,8 @@ struct AtomDescription
 {
     float radius;
     float mass;
-    float lennardJonesA;
-    float lennardJonesB;
+    float lennardJonesEpsilon;
+    float lennardJonesSigma;
     Vector4 color;
 };
 

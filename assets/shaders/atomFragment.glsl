@@ -44,7 +44,7 @@ layout(location=1) in vec3 inViewPosition;
 
 layout(location=0) out vec4 outFragColor;
 
-layout (depth_greater) out float gl_FragDepth; // To keep early-z test.
+layout (depth_less) out float gl_FragDepth; // To keep early-z test.
 
 bool raySphereTest(float sphereRadius, in vec3 sphereCenter, in vec3 rayDirection, out vec2 lambdas)
 {
@@ -97,4 +97,6 @@ void main()
 
     //outFragColor = vec4(N.xyz*0.5 + 0.5, 1.0);
     //outFragColor = vec4(V.xyz*0.5 + 0.5, 1.0);
+
+    //outFragColor = gl_FragCoord.z - gl_FragDepth < 0.0 ? vec4(1.0, 1.0, 0.0, 1.0) : vec4(0.0, 1.0, 1.0, 1.0);
 }
