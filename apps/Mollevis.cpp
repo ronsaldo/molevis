@@ -226,9 +226,9 @@ public:
             colorAttachment.format = colorBufferFormat;
             colorAttachment.begin_action = AGPU_ATTACHMENT_CLEAR;
             colorAttachment.end_action = AGPU_ATTACHMENT_KEEP;
-            colorAttachment.clear_value.r = 0.5;
-            colorAttachment.clear_value.g = 0.5;
-            colorAttachment.clear_value.b = 0.5;
+            colorAttachment.clear_value.r = 0.0;
+            colorAttachment.clear_value.g = 0.0;
+            colorAttachment.clear_value.b = 0.0;
             colorAttachment.clear_value.a = 0;
             colorAttachment.sample_count = 1;
 
