@@ -5,6 +5,7 @@
 #include "AtomDescription.hpp"
 #include "AtomState.hpp"
 #include "CameraState.hpp"
+#include "PDBFormat.hpp"
 #include "Vector2.hpp"
 #include "Vector3.hpp"
 #include "Vector4.hpp"
@@ -74,6 +75,8 @@ public:
     Mollevis() = default;
     ~Mollevis() = default;
 
+    PDBFile pdbFile;
+
     int main(int argc, const char *argv[])
     {
         bool vsyncDisabled = false;
@@ -85,41 +88,61 @@ public:
         agpu_uint gpuIndex = 0;
         int randomAtomCount = 1000;
         int randomBondCount = 200;
+        std::string inputFileName;
 
         for (int i = 1; i < argc; ++i)
         {
             std::string arg = argv[i];
-            if (arg == "-no-vsync")
+            if(arg[0] == '-')
             {
-                vsyncDisabled = true;
+                if (arg == "-no-vsync")
+                {
+                    vsyncDisabled = true;
+                }
+                else if (arg == "-platform")
+                {
+                    platformIndex = agpu_uint(atoi(argv[++i]));
+                }
+                else if (arg == "-gpu")
+                {
+                    gpuIndex = agpu_uint(atoi(argv[++i]));
+                }
+                else if (arg == "-debug")
+                {
+                    debugLayerEnabled = true;
+                }
+                else if (arg == "-gen-atoms")
+                {
+                    randomAtomCount = atoi(argv[++i]);
+                }
+                else if (arg == "-gen-bonds")
+                {
+                    randomBondCount = atoi(argv[++i]);
+                }
+                else if (arg == "-paused")
+                {
+                    isSimulating = false;
+                }
             }
-            else if (arg == "-platform")
+            else
             {
-                platformIndex = agpu_uint(atoi(argv[++i]));
-            }
-            else if (arg == "-gpu")
-            {
-                gpuIndex = agpu_uint(atoi(argv[++i]));
-            }
-            else if (arg == "-debug")
-            {
-                debugLayerEnabled = true;
-            }
-            else if (arg == "-gen-atoms")
-            {
-                randomAtomCount = atoi(argv[++i]);
-            }
-            else if (arg == "-gen-bonds")
-            {
-                randomBondCount = atoi(argv[++i]);
-            }
-            else if (arg == "-paused")
-            {
-                isSimulating = false;
+                inputFileName = arg;
             }
         }
 
-        generateRandomDataset(randomAtomCount, randomBondCount);
+        if(!inputFileName.empty())
+        {
+            isSimulating = false;
+            pdbFile = PDBFile();
+            pdbFile.openAndParsePDBFile(inputFileName);
+
+            convertPDBDataset(pdbFile);
+
+        }
+        else
+        {
+            generateRandomDataset(randomAtomCount, randomBondCount);
+        }
 
         // Get the platform.
         agpu_uint numPlatforms;
@@ -494,6 +517,30 @@ public:
         SDL_DestroyWindow(window);
         SDL_Quit();
         return 0;
+    }
+
+    void convertPDBDataset(const PDBFile &file)
+    {
+        Random rand;
+        size_t atomCount = file.atoms.size();
+        atomDescriptions.reserve(atomCount);
+        initialAtomStates.reserve(atomCount);
+
+        for(size_t i = 0; i <file.atoms.size(); ++i)
+        {
+            auto &pdbAtom = file.atoms[i];
+            auto description = AtomDescription{};
+            // TODO: A color according to the element.
+            description.color = rand.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
+            description.radius = 1.0;
+
+            auto state = AtomState{};
+            state.position = Vector3(pdbAtom.x, pdbAtom.y, pdbAtom.z);
+
+            atomDescriptions.push_back(description);
+            initialAtomStates.push_back(state);
+        }
+
     }
 
     void generateRandomDataset(size_t atomsToGenerate, size_t bondsToGenerate)
