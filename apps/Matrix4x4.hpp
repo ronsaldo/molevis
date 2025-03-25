@@ -3,10 +3,21 @@
 
 #include "Vector4.hpp"
 #include "Matrix3x3.hpp"
+#include "AGPU/agpu.hpp"
 #include <stdlib.h>
 
 struct Matrix4x4
 {
+    static Matrix4x4 fromAgpu(const agpu_matrix4x4f &am)
+    {
+        return Matrix4x4{{
+            {am.c1.x, am.c1.y, am.c1.z, am.c1.w},
+            {am.c2.x, am.c2.y, am.c2.z, am.c2.w},
+            {am.c3.x, am.c3.y, am.c3.z, am.c3.w},
+            {am.c4.x, am.c4.y, am.c4.z, am.c4.w},
+        }};
+    };
+
     static Matrix4x4 perspective(float fovy, float aspect, float nearDistanceDistance, float farDistanceDistance, bool flipVertically)
     {
         float fovyRad = fovy *0.5f * (M_PI / 180.0f);

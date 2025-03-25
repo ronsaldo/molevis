@@ -1178,12 +1178,72 @@ public:
         pushConstants.bondCount = atomBondDescriptions.size();
         pushConstants.timeStep = simulationTimeStep;
 
-        auto leftEyeCameraState = cameraState;
-        auto rightEyeCameraState = cameraState;
+        auto hmdCameraState = cameraState;
+        auto leftEyeCameraState = hmdCameraState;
+        auto rightEyeCameraState = hmdCameraState;
+
+        if(isVirtualReality)
+        {
+            vrSystem->waitAndFetchPoses();
+            float nearDistance = cameraState.nearDistance;
+            float farDistance = cameraState.farDistance;
+
+            size_t poseCount = vrSystem->getCurrentTrackedDevicePoseCount();
+            printf("Pose count %zu\n", poseCount);
+            for(size_t i = 0; i < poseCount; ++i)
+            {
+                agpu_vr_tracked_device_pose trackedPose;
+                //agpu_vr_tracked_device_pose renderTrackedPose;
+                vrSystem->getCurrentTrackedDevicePoseInto(i, &trackedPose);
+                if(!trackedPose.is_valid)
+                    continue;
+
+                if(trackedPose.device_class != AGPU_VR_TRACKED_DEVICE_CLASS_HMD)
+                    continue;
+
+                auto headMatrix = Matrix4x4::fromAgpu(trackedPose.device_to_absolute_tracking);
+                hmdCameraState.viewMatrix = headMatrix;
+                hmdCameraState.inverseViewMatrix = hmdCameraState.viewMatrix.inverse();
+            }
+
+            leftEyeCameraState = hmdCameraState;
+            rightEyeCameraState = hmdCameraState;
+
+            // Left eye
+            {
+                agpu_frustum_tangents tangents;
+                vrSystem->getProjectionFrustumTangents(AGPU_VR_EYE_LEFT, &tangents);
+                leftEyeCameraState.projectionMatrix = Matrix4x4::frustum(tangents.left*nearDistance, tangents.right*nearDistance, tangents.bottom*nearDistance, tangents.top*nearDistance, nearDistance, farDistance, device->hasTopLeftNdcOrigin());
+                leftEyeCameraState.inverseProjectionMatrix = leftEyeCameraState.projectionMatrix.inverse();
+
+                agpu_matrix4x4f eyeToHead;
+                vrSystem->getEyeToHeadTransform(AGPU_VR_EYE_LEFT, &eyeToHead);
+
+                auto eyeToHeadMatrix = Matrix4x4::fromAgpu(eyeToHead);
+                leftEyeCameraState.viewMatrix = leftEyeCameraState.viewMatrix * eyeToHeadMatrix;
+                leftEyeCameraState.inverseViewMatrix = leftEyeCameraState.viewMatrix.inverse();
+            }
+
+            // right eye
+            {
+                agpu_frustum_tangents tangents;
+                vrSystem->getProjectionFrustumTangents(AGPU_VR_EYE_RIGHT, &tangents);
+                rightEyeCameraState.projectionMatrix = Matrix4x4::frustum(tangents.left*nearDistance, tangents.right*nearDistance, tangents.bottom*nearDistance, tangents.top*nearDistance, nearDistance, farDistance, device->hasTopLeftNdcOrigin());
+                rightEyeCameraState.inverseProjectionMatrix = rightEyeCameraState.projectionMatrix.inverse();
+
+                agpu_matrix4x4f eyeToHead;
+                vrSystem->getEyeToHeadTransform(AGPU_VR_EYE_RIGHT, &eyeToHead);
+
+                auto eyeToHeadMatrix = Matrix4x4::fromAgpu(eyeToHead);
+                rightEyeCameraState.viewMatrix = rightEyeCameraState.viewMatrix * eyeToHeadMatrix;
+                rightEyeCameraState.inverseViewMatrix = rightEyeCameraState.viewMatrix.inverse();
+
+            }
+        }
 
         // Upload the data buffers.
-        leftEyeCameraStateUniformBuffer->uploadBufferData(0, sizeof(leftEyeCameraState), &cameraState);
-        rightEyeCameraStateUniformBuffer->uploadBufferData(0, sizeof(rightEyeCameraState), &cameraState);
+        leftEyeCameraStateUniformBuffer->uploadBufferData(0, sizeof(leftEyeCameraState), &leftEyeCameraState);
+        rightEyeCameraStateUniformBuffer->uploadBufferData(0, sizeof(rightEyeCameraState), &rightEyeCameraState);
         uiDataBuffer->uploadBufferData(0, uiElementQuadBuffer.size() * sizeof(UIElementQuad), uiElementQuadBuffer.data());
 
         // Build the command list
@@ -1249,7 +1309,9 @@ public:
 
         swapBuffers();
         commandQueue->finishExecution();
-        
+
+        if(isVirtualReality && vrSystem)
+            vrSystem->submitEyeRenderTargets(leftEyeTexture, rightEyeTexture);        
     }
 
     void emitCommandsForEyeRendering(bool isRightEye)
@@ -1265,8 +1327,8 @@ public:
         commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_VERTEX_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
 
         commandList->beginRenderPass(mainRenderPass, hdrTargetFramebuffer, false);
-        commandList->setViewport(0, 0, displayWidth, displayHeight);
-        commandList->setScissor(0, 0, displayWidth, displayHeight);
+        commandList->setViewport(0, 0, framebufferDisplayWidth, framebufferDisplayHeight);
+        commandList->setScissor(0, 0, framebufferDisplayWidth, framebufferDisplayHeight);
 
         // Atoms
         commandList->usePipelineState(atomDrawPipeline);
@@ -1291,8 +1353,8 @@ public:
             commandList->beginRenderPass(outputRenderPass, rightEyeFramebuffer, false);
         else
             commandList->beginRenderPass(outputRenderPass, leftEyeFramebuffer, false);
-        commandList->setViewport(0, 0, displayWidth, displayHeight);
-        commandList->setScissor(0, 0, displayWidth, displayHeight);
+        commandList->setViewport(0, 0, framebufferDisplayWidth, framebufferDisplayHeight);
+        commandList->setScissor(0, 0, framebufferDisplayWidth, framebufferDisplayHeight);
 
         commandList->usePipelineState(filmicTonemappingPipeline);
         commandList->drawArrays(3, 1, 0, 0);
