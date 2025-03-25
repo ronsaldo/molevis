@@ -19,12 +19,21 @@
 #include <random>
 #include <time.h>
 
+#ifdef _WIN32
+int64_t getMicroseconds()
+{
+    // TODO: Use performance counters
+    return SDL_GetTicks64()*1000;
+}
+#else
 int64_t getMicroseconds()
 {
     timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return int64_t(ts.tv_sec*1000000) + int64_t(ts.tv_nsec/1000);
 }
+
+#endif
 
 struct UIElementQuad
 {
@@ -75,7 +84,7 @@ public:
     Mollevis() = default;
     ~Mollevis() = default;
 
-    int main(int argc, const char *argv[])
+    int mainStart(int argc, const char *argv[])
     {
         bool vsyncDisabled = false;
         bool debugLayerEnabled = false;
@@ -225,7 +234,7 @@ public:
         currentSwapChainCreateInfo.height = cameraState.screenHeight;
         currentSwapChainCreateInfo.buffer_count = 3;
         currentSwapChainCreateInfo.flags = AGPU_SWAP_CHAIN_FLAG_APPLY_SCALE_FACTOR_FOR_HI_DPI;
-        if (vsyncDisabled)
+        if (vsyncDisabled || isVirtualReality)
         {
             currentSwapChainCreateInfo.presentation_mode = AGPU_SWAP_CHAIN_PRESENTATION_MODE_MAILBOX;
             currentSwapChainCreateInfo.fallback_presentation_mode = AGPU_SWAP_CHAIN_PRESENTATION_MODE_IMMEDIATE;
@@ -531,7 +540,7 @@ public:
         filmicTonemappingFragment = compileShaderWithSourceFile("assets/shaders/filmicTonemapping.glsl", AGPU_FRAGMENT_SHADER);
         {
             auto builder = device->createPipelineBuilder();
-            builder->setRenderTargetFormat(0, colorBufferFormat);
+            builder->setRenderTargetFormat(0, swapChainColorBufferFormat);
             builder->setDepthStencilFormat(AGPU_TEXTURE_FORMAT_UNKNOWN);
             builder->setShaderSignature(shaderSignature);
             builder->attachShader(screenQuadVertex);
@@ -543,7 +552,7 @@ public:
         passthroughFragment  = compileShaderWithSourceFile("assets/shaders/passthroughLeft.glsl", AGPU_FRAGMENT_SHADER);
         {
             auto builder = device->createPipelineBuilder();
-            builder->setRenderTargetFormat(0, colorBufferFormat);
+            builder->setRenderTargetFormat(0, swapChainColorBufferFormat);
             builder->setDepthStencilFormat(AGPU_TEXTURE_FORMAT_UNKNOWN);
             builder->setShaderSignature(shaderSignature);
             builder->attachShader(screenQuadVertex);
@@ -555,7 +564,7 @@ public:
         sideBySideFragment  = compileShaderWithSourceFile("assets/shaders/sideBySide.glsl", AGPU_FRAGMENT_SHADER);
         {
             auto builder = device->createPipelineBuilder();
-            builder->setRenderTargetFormat(0, colorBufferFormat);
+            builder->setRenderTargetFormat(0, swapChainColorBufferFormat);
             builder->setDepthStencilFormat(AGPU_TEXTURE_FORMAT_UNKNOWN);
             builder->setShaderSignature(shaderSignature);
             builder->attachShader(screenQuadVertex);
@@ -587,7 +596,8 @@ public:
 
         {
             auto builder = device->createPipelineBuilder();
-            builder->setRenderTargetFormat(0, colorBufferFormat);
+            builder->setRenderTargetFormat(0, swapChainColorBufferFormat);
+            builder->setDepthStencilFormat(AGPU_TEXTURE_FORMAT_UNKNOWN);
             builder->setShaderSignature(shaderSignature);
             builder->attachShader(uiElementVertex);
             builder->attachShader(uiElementFragment);
@@ -629,11 +639,24 @@ public:
 
     void createIntermediateTexturesAndFramebuffer()
     {
-        if(framebufferDisplayWidth == displayWidth && framebufferDisplayHeight == displayHeight)
-            return;
+        if(isVirtualReality)
+        {
+            if(framebufferDisplayWidth == vrDisplayWidth && framebufferDisplayHeight == vrDisplayHeight)
+                return;
 
-        framebufferDisplayWidth = displayWidth;
-        framebufferDisplayHeight = displayHeight;
+            framebufferDisplayWidth = vrDisplayWidth;
+            framebufferDisplayHeight = vrDisplayHeight;
+            printf("Make intermediate %d %d\n", framebufferDisplayWidth, framebufferDisplayHeight);   
+        }
+        else
+        {
+            if(framebufferDisplayWidth == displayWidth && framebufferDisplayHeight == displayHeight)
+                return;
+
+            framebufferDisplayWidth = displayWidth;
+            framebufferDisplayHeight = displayHeight;        
+        }
+
 
         // Depth stencil
         {
@@ -1452,7 +1475,9 @@ public:
     int displayHeight = 480;
 };
 
-int main(int argc, const char *argv[])
+#undef main
+
+int main(int argc, const char **argv)
 {
-    return Mollevis().main(argc, argv);
+    return Mollevis().mainStart(argc, argv);
 }

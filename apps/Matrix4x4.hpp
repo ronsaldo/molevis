@@ -7,23 +7,23 @@
 
 struct Matrix4x4
 {
-    static Matrix4x4 perspective(float fovy, float aspect, float nearDistance, float farDistance, bool flipVertically)
+    static Matrix4x4 perspective(float fovy, float aspect, float nearDistanceDistance, float farDistanceDistance, bool flipVertically)
     {
         float fovyRad = fovy *0.5f * (M_PI / 180.0f);
-        float top = nearDistance * tan(fovyRad);
+        float top = nearDistanceDistance * tan(fovyRad);
         float right = top * aspect;
 
-        return frustum(-right, right, -top, top, nearDistance, farDistance, flipVertically);
+        return frustum(-right, right, -top, top, nearDistanceDistance, farDistanceDistance, flipVertically);
     }
 
-    static Matrix4x4 frustum(float left, float right, float bottom, float top, float near, float far, bool flipVertically)
+    static Matrix4x4 frustum(float left, float right, float bottom, float top, float nearDistance, float farDistance, bool flipVertically)
     {
         float flipYFactor = flipVertically ? -1.0f : 1.0f;
         return Matrix4x4{{
-            {2*near / (right - left), 0, 0, 0},
-            {0, flipYFactor*2*near / (top - bottom), 0, 0},
-            {(right + left) / (right - left), flipYFactor*(top + bottom) / (top - bottom), near / (far - near), -1},
-            {0, 0, near*far / (far - near), 0}
+            {2*nearDistance / (right - left), 0, 0, 0},
+            {0, flipYFactor*2*nearDistance / (top - bottom), 0, 0},
+            {(right + left) / (right - left), flipYFactor*(top + bottom) / (top - bottom), nearDistance / (farDistance - nearDistance), -1},
+            {0, 0, nearDistance*farDistance / (farDistance - nearDistance), 0}
         }};
     }
 
