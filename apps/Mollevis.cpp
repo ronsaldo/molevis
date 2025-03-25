@@ -86,6 +86,7 @@ public:
         agpu_uint gpuIndex = 0;
         int randomAtomCount = 1000;
         int randomBondCount = 200;
+        initializeAtomColorConventions();
         std::string inputFileName;
 
         for (int i = 1; i < argc; ++i)
@@ -520,6 +521,14 @@ public:
     Random randColor;
     std::unordered_map<std::string, Vector4> atomTypeColorMap;
 
+    void initializeAtomColorConventions()
+    {
+        atomTypeColorMap["H"] = Vector4(0.9, 0.9, 0.9, 1.0);
+        atomTypeColorMap["C"] = Vector4(0.01, 0.01, 0.01, 1.0);
+        atomTypeColorMap["N"] = Vector4(0.5, 0.3, 0.8, 1.0);
+        atomTypeColorMap["O"] = Vector4(1.0, 0.0, 0.0, 1.0);
+    }
+
     Vector4 getOrCreateColorForAtomType(const std::string &type)
     {
         auto it = atomTypeColorMap.find(type);
@@ -546,7 +555,6 @@ public:
             auto description = AtomDescription{};
             description.mass = chemAtom.mass();
             
-            // TODO: A color according to the element.
             description.color = getOrCreateColorForAtomType(chemAtom.type());
             description.radius = 0.2;
             auto covalentRadius = chemAtom.covalent_radius();
