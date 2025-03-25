@@ -134,9 +134,6 @@ public:
             chemfiles::Trajectory file(inputFileName);
             chemfiles::Frame frame = file.read();
 
-            ///pdbFile = PDBFile();
-            ///pdbFile.openAndParsePDBFile(inputFileName);
-            ///convertPDBDataset(pdbFile);
             convertChemfileFrame(frame);
 
         }
@@ -520,29 +517,19 @@ public:
         return 0;
     }
 
-    /*void convertPDBDataset(const PDBFile &file)
+    Random randColor;
+    std::unordered_map<std::string, Vector4> atomTypeColorMap;
+
+    Vector4 getOrCreateColorForAtomType(const std::string &type)
     {
-        Random rand;
-        size_t atomCount = file.atoms.size();
-        atomDescriptions.reserve(atomCount);
-        initialAtomStates.reserve(atomCount);
-
-        for(size_t i = 0; i <file.atoms.size(); ++i)
-        {
-            auto &pdbAtom = file.atoms[i];
-            auto description = AtomDescription{};
-            // TODO: A color according to the element.
-            description.color = rand.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
-            description.radius = 1.0;
-
-            auto state = AtomState{};
-            state.position = Vector3(pdbAtom.x, pdbAtom.y, pdbAtom.z);
-
-            atomDescriptions.push_back(description);
-            initialAtomStates.push_back(state);
-        }
-
-    }*/
+        auto it = atomTypeColorMap.find(type);
+        if(it != atomTypeColorMap.end())
+            return it->second;
+        
+        auto generatedColor = randColor.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
+        atomTypeColorMap.insert(std::make_pair(type, generatedColor));
+        return generatedColor;
+    }
 
     void convertChemfileFrame(chemfiles::Frame &frame)
     {
@@ -554,11 +541,17 @@ public:
         for(size_t i = 0; i < positions.size(); ++i)
         {
             const auto &atomPosition = positions[i];
+            const auto &chemAtom = frame[i];
 
             auto description = AtomDescription{};
+            description.mass = chemAtom.mass();
+            
             // TODO: A color according to the element.
-            description.color = rand.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
-            description.radius = 0.5;
+            description.color = getOrCreateColorForAtomType(chemAtom.type());
+            description.radius = 0.2;
+            auto covalentRadius = chemAtom.covalent_radius();
+            if(covalentRadius)
+                description.radius = covalentRadius.value();
 
             auto state = AtomState{};
             state.position = Vector3(atomPosition[0], atomPosition[1], atomPosition[2]);
