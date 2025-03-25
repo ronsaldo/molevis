@@ -122,6 +122,15 @@ public:
                 {
                     isSimulating = false;
                 }
+                else if (arg == "-stereo")
+                {
+                    isStereo = true;
+                }
+                else if (arg == "-vr")
+                {
+                    isVirtualReality = true;
+                }
+                
             }
             else
             {
@@ -207,8 +216,8 @@ public:
             return -1;
         }
 
-        currentSwapChainCreateInfo.colorbuffer_format = colorBufferFormat;
-        currentSwapChainCreateInfo.depth_stencil_format = depthBufferFormat;
+        currentSwapChainCreateInfo.colorbuffer_format = swapChainColorBufferFormat;
+        currentSwapChainCreateInfo.depth_stencil_format = AGPU_TEXTURE_FORMAT_UNKNOWN;
         currentSwapChainCreateInfo.width = cameraState.screenWidth;
         currentSwapChainCreateInfo.height = cameraState.screenHeight;
         currentSwapChainCreateInfo.buffer_count = 3;
@@ -269,6 +278,25 @@ public:
             mainRenderPass = device->createRenderPass(&description);
         }
 
+        // Create the output render pass
+        {
+            agpu_renderpass_color_attachment_description colorAttachment = {};
+            colorAttachment.format = swapChainColorBufferFormat;
+            colorAttachment.begin_action = AGPU_ATTACHMENT_CLEAR;
+            colorAttachment.end_action = AGPU_ATTACHMENT_KEEP;
+            colorAttachment.clear_value.r = 0;
+            colorAttachment.clear_value.g = 0;
+            colorAttachment.clear_value.b = 0;
+            colorAttachment.clear_value.a = 0;
+            colorAttachment.sample_count = 1;
+
+            agpu_renderpass_description description = {};
+            description.color_attachment_count = 1;
+            description.color_attachments = &colorAttachment;
+
+            outputRenderPass = device->createRenderPass(&description);
+        }
+
         // Create the shader signature
         {
 
@@ -277,10 +305,13 @@ public:
             builder->beginBindingBank(1);
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_SAMPLER, 1);
 
-            builder->beginBindingBank(1);
+            builder->beginBindingBank(2);
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_UNIFORM_BUFFER, 1); // Screen and UI state
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // UI Data
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_SAMPLED_IMAGE, 1); // Bitmap font
+            builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_SAMPLED_IMAGE, 1); // Hdr source
+            builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_SAMPLED_IMAGE, 1); // Left eye
+            builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_SAMPLED_IMAGE, 1); // Right eye
 
             builder->beginBindingBank(2);
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Atom Description Buffer
@@ -326,9 +357,17 @@ public:
             desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_UNIFORM_BUFFER);
             desc.main_usage_mode = AGPU_UNIFORM_BUFFER;
 	        desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
-            cameraStateUniformBuffer = device->createBuffer(&desc, nullptr);
+            leftEyeCameraStateUniformBuffer = device->createBuffer(&desc, nullptr);
         }
-
+        {
+            agpu_buffer_description desc = {};
+            desc.size = (sizeof(CameraState) + 255) & (-256);
+            desc.heap_type = AGPU_MEMORY_HEAP_TYPE_HOST_TO_DEVICE;
+            desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_UNIFORM_BUFFER);
+            desc.main_usage_mode = AGPU_UNIFORM_BUFFER;
+	        desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
+            rightEyeCameraStateUniformBuffer = device->createBuffer(&desc, nullptr);
+        }
         {
             uiElementQuadBuffer.reserve(UIElementQuadBufferMaxCapacity);
             agpu_buffer_description desc = {};
@@ -462,15 +501,67 @@ public:
             builder->setDepthState(true, true, AGPU_GREATER_EQUAL);
             bondDrawPipeline = finishBuildingPipeline(builder);
         }
+
+        cameraState.flipVertically = device->hasTopLeftNdcOrigin() == device->hasBottomLeftTextureCoordinates();
+
+        // Tonemapping
+        if(cameraState.flipVertically)
+            screenQuadVertex = compileShaderWithSourceFile("assets/shaders/screenQuadFlipped.glsl", AGPU_VERTEX_SHADER);
+        else
+            screenQuadVertex = compileShaderWithSourceFile("assets/shaders/screenQuad.glsl", AGPU_VERTEX_SHADER);
+        filmicTonemappingFragment = compileShaderWithSourceFile("assets/shaders/filmicTonemapping.glsl", AGPU_FRAGMENT_SHADER);
+        {
+            auto builder = device->createPipelineBuilder();
+            builder->setRenderTargetFormat(0, colorBufferFormat);
+            builder->setDepthStencilFormat(AGPU_TEXTURE_FORMAT_UNKNOWN);
+            builder->setShaderSignature(shaderSignature);
+            builder->attachShader(screenQuadVertex);
+            builder->attachShader(filmicTonemappingFragment);
+            builder->setPrimitiveType(AGPU_TRIANGLE_STRIP);
+            filmicTonemappingPipeline = finishBuildingPipeline(builder);
+        }
+
+        passthroughFragment  = compileShaderWithSourceFile("assets/shaders/passthroughLeft.glsl", AGPU_FRAGMENT_SHADER);
+        {
+            auto builder = device->createPipelineBuilder();
+            builder->setRenderTargetFormat(0, colorBufferFormat);
+            builder->setDepthStencilFormat(AGPU_TEXTURE_FORMAT_UNKNOWN);
+            builder->setShaderSignature(shaderSignature);
+            builder->attachShader(screenQuadVertex);
+            builder->attachShader(passthroughFragment);
+            builder->setPrimitiveType(AGPU_TRIANGLE_STRIP);
+            passthroughPipeline = finishBuildingPipeline(builder);
+        }
+
+        sideBySideFragment  = compileShaderWithSourceFile("assets/shaders/sideBySide.glsl", AGPU_FRAGMENT_SHADER);
+        {
+            auto builder = device->createPipelineBuilder();
+            builder->setRenderTargetFormat(0, colorBufferFormat);
+            builder->setDepthStencilFormat(AGPU_TEXTURE_FORMAT_UNKNOWN);
+            builder->setShaderSignature(shaderSignature);
+            builder->attachShader(screenQuadVertex);
+            builder->attachShader(sideBySideFragment);
+            builder->setPrimitiveType(AGPU_TRIANGLE_STRIP);
+            sideBySidePipeline = finishBuildingPipeline(builder);
+        }
+        
+
         // Data binding
-        screenStateBinding = shaderSignature->createShaderResourceBinding(1);
-        screenStateBinding->bindUniformBuffer(0, cameraStateUniformBuffer);
-        screenStateBinding->bindStorageBuffer(1, uiDataBuffer);
-        screenStateBinding->bindSampledTextureView(2, bitmapFont->getOrCreateFullView());
+        leftEyeScreenStateBinding = shaderSignature->createShaderResourceBinding(1);
+        leftEyeScreenStateBinding->bindUniformBuffer(0, leftEyeCameraStateUniformBuffer);
+        leftEyeScreenStateBinding->bindStorageBuffer(1, uiDataBuffer);
+        leftEyeScreenStateBinding->bindSampledTextureView(2, bitmapFont->getOrCreateFullView());
+
+        rightEyeScreenStateBinding = shaderSignature->createShaderResourceBinding(1);
+        rightEyeScreenStateBinding->bindUniformBuffer(0, rightEyeCameraStateUniformBuffer);
+        rightEyeScreenStateBinding->bindStorageBuffer(1, uiDataBuffer);
+        rightEyeScreenStateBinding->bindSampledTextureView(2, bitmapFont->getOrCreateFullView());
 
         // UI pipeline state.
         uiElementVertex = compileShaderWithSourceFile("assets/shaders/uiElementVertex.glsl", AGPU_VERTEX_SHADER);
         uiElementFragment = compileShaderWithSourceFile("assets/shaders/uiElementFragment.glsl", AGPU_FRAGMENT_SHADER);
+
+        createIntermediateTexturesAndFramebuffer();
 
         if(!uiElementVertex || !uiElementFragment)
             return 1;
@@ -490,7 +581,6 @@ public:
             uiPipeline = finishBuildingPipeline(builder);
         }
 
-        cameraState.flipVertically = device->hasTopLeftNdcOrigin() == device->hasBottomLeftTextureCoordinates();
 
         // Create the command allocator and command list
         commandAllocator = device->createCommandAllocator(AGPU_COMMAND_LIST_TYPE_DIRECT, commandQueue);
@@ -516,6 +606,91 @@ public:
         SDL_DestroyWindow(window);
         SDL_Quit();
         return 0;
+    }
+
+    void createIntermediateTexturesAndFramebuffer()
+    {
+        if(framebufferDisplayWidth == displayWidth && framebufferDisplayHeight == displayHeight)
+            return;
+
+        framebufferDisplayWidth = displayWidth;
+        framebufferDisplayHeight = displayHeight;
+
+        // Depth stencil
+        {
+            agpu_texture_description desc = {};
+            desc.type = AGPU_TEXTURE_2D;
+            desc.width = framebufferDisplayWidth;
+            desc.height = framebufferDisplayHeight;
+            desc.depth = 1;
+            desc.layers = 1;
+            desc.miplevels = 1;
+            desc.format = depthBufferFormat;
+            desc.usage_modes = AGPU_TEXTURE_USAGE_DEPTH_ATTACHMENT;
+            desc.main_usage_mode = AGPU_TEXTURE_USAGE_DEPTH_ATTACHMENT;
+            desc.heap_type = AGPU_MEMORY_HEAP_TYPE_DEVICE_LOCAL;
+            desc.sample_count = 1;
+            desc.sample_quality = 0;
+
+            depthStencilTexture = device->createTexture(&desc);
+        }
+
+        // Color targets
+        {
+            agpu_texture_description desc = {};
+            desc.type = AGPU_TEXTURE_2D;
+            desc.width = framebufferDisplayWidth;
+            desc.height = framebufferDisplayHeight;
+            desc.depth = 1;
+            desc.layers = 1;
+            desc.miplevels = 1;
+            desc.format = colorBufferFormat;
+            desc.usage_modes = agpu_texture_usage_mode_mask(AGPU_TEXTURE_USAGE_COLOR_ATTACHMENT | AGPU_TEXTURE_USAGE_SAMPLED | AGPU_TEXTURE_USAGE_COPY_SOURCE);
+            desc.main_usage_mode = AGPU_TEXTURE_USAGE_SAMPLED;
+            desc.heap_type = AGPU_MEMORY_HEAP_TYPE_DEVICE_LOCAL;
+            desc.sample_count = 1;
+            desc.sample_quality = 0;
+
+            hdrTargetTexture = device->createTexture(&desc);
+        }
+
+        // Color output targets
+        {
+            agpu_texture_description desc = {};
+            desc.type = AGPU_TEXTURE_2D;
+            desc.width = framebufferDisplayWidth;
+            desc.height = framebufferDisplayHeight;
+            desc.depth = 1;
+            desc.layers = 1;
+            desc.miplevels = 1;
+            desc.format = swapChainColorBufferFormat;
+            desc.usage_modes = agpu_texture_usage_mode_mask(AGPU_TEXTURE_USAGE_COLOR_ATTACHMENT | AGPU_TEXTURE_USAGE_SAMPLED | AGPU_TEXTURE_USAGE_COPY_SOURCE);
+            desc.main_usage_mode = AGPU_TEXTURE_USAGE_SAMPLED;
+            desc.heap_type = AGPU_MEMORY_HEAP_TYPE_DEVICE_LOCAL;
+            desc.sample_count = 1;
+            desc.sample_quality = 0;
+
+            leftEyeTexture = device->createTexture(&desc);
+            rightEyeTexture = device->createTexture(&desc);
+        }
+
+        auto depthStencilView = depthStencilTexture->getOrCreateFullView();
+        auto hdrTargetTextureView = hdrTargetTexture->getOrCreateFullView();
+        hdrTargetFramebuffer = device->createFrameBuffer(framebufferDisplayWidth, framebufferDisplayHeight, 1, &hdrTargetTextureView, depthStencilView);
+
+        auto leftEyeView = leftEyeTexture->getOrCreateFullView();
+        leftEyeFramebuffer = device->createFrameBuffer(framebufferDisplayWidth, framebufferDisplayHeight, 1, &leftEyeView, nullptr);
+
+        auto rightEyeView = rightEyeTexture->getOrCreateFullView();
+        rightEyeFramebuffer = device->createFrameBuffer(framebufferDisplayWidth, framebufferDisplayHeight, 1, &rightEyeView, nullptr);
+
+        leftEyeScreenStateBinding->bindSampledTextureView(3, hdrTargetTextureView);
+        leftEyeScreenStateBinding->bindSampledTextureView(4, leftEyeView);
+        leftEyeScreenStateBinding->bindSampledTextureView(5, rightEyeView);
+
+        rightEyeScreenStateBinding->bindSampledTextureView(3, hdrTargetTextureView);
+        rightEyeScreenStateBinding->bindSampledTextureView(4, leftEyeView);
+        rightEyeScreenStateBinding->bindSampledTextureView(5, rightEyeView);
     }
 
     Random randColor;
@@ -789,6 +964,7 @@ public:
         displayHeight = swapChain->getHeight();
         if(swapChain)
             currentSwapChainCreateInfo = newSwapChainCreateInfo;
+        createIntermediateTexturesAndFramebuffer();
     }
 
     void onKeyDown(const SDL_KeyboardEvent &event)
@@ -960,19 +1136,21 @@ public:
         pushConstants.bondCount = atomBondDescriptions.size();
         pushConstants.timeStep = simulationTimeStep;
 
+        auto leftEyeCameraState = cameraState;
+        auto rightEyeCameraState = cameraState;
+
         // Upload the data buffers.
-        cameraStateUniformBuffer->uploadBufferData(0, sizeof(cameraState), &cameraState);
+        leftEyeCameraStateUniformBuffer->uploadBufferData(0, sizeof(leftEyeCameraState), &cameraState);
+        rightEyeCameraStateUniformBuffer->uploadBufferData(0, sizeof(rightEyeCameraState), &cameraState);
         uiDataBuffer->uploadBufferData(0, uiElementQuadBuffer.size() * sizeof(UIElementQuad), uiElementQuadBuffer.data());
 
         // Build the command list
         commandAllocator->reset();
         commandList->reset(commandAllocator, nullptr);
 
-        auto backBuffer = swapChain->getCurrentBackBuffer();
-
         commandList->setShaderSignature(shaderSignature);
         commandList->useComputeShaderResources(samplersBinding);
-        commandList->useComputeShaderResources(screenStateBinding);
+        commandList->useComputeShaderResources(leftEyeScreenStateBinding);
         commandList->useComputeShaderResources(atomFrontBufferBinding);
         commandList->useComputeShaderResources(atomBoundQuadBufferBinding);
         commandList->pushConstants(0, sizeof(pushConstants), &pushConstants);
@@ -988,20 +1166,73 @@ public:
             }
         }
 
+        if(isStereo || isVirtualReality)
+        {
+            emitCommandsForEyeRendering(false);
+            emitCommandsForEyeRendering(true);
+        }
+        else
+        {
+            emitCommandsForEyeRendering(false);
+        }
+
+        auto outputBackBuffer = swapChain->getCurrentBackBuffer();
+        commandList->beginRenderPass(outputRenderPass, outputBackBuffer, false);
+        commandList->setViewport(0, 0, displayWidth, displayHeight);
+        commandList->setScissor(0, 0, displayWidth, displayHeight);
+
+        if(isStereo)
+        {
+            // Side by side compose
+            commandList->usePipelineState(sideBySidePipeline);
+            commandList->drawArrays(4, 1, 0, 0);
+        }
+        else
+        {
+            // Pass the left eye output
+            commandList->usePipelineState(passthroughPipeline);
+            commandList->drawArrays(4, 1, 0, 0);
+        }
+        
+        // UI element pipeline
+        commandList->usePipelineState(uiPipeline);
+        commandList->drawArrays(4, uiElementQuadBuffer.size(), 0, 0);
+        
+        commandList->endRenderPass();
+
+        commandList->close();
+
+        // Queue the command list
+        commandQueue->addCommandList(commandList);
+
+        swapBuffers();
+        commandQueue->finishExecution();
+        
+    }
+
+    void emitCommandsForEyeRendering(bool isRightEye)
+    {
+        if(isRightEye)
+            commandList->useComputeShaderResources(rightEyeScreenStateBinding);
+        else
+            commandList->useComputeShaderResources(leftEyeScreenStateBinding);
+
         // Screen bounding quad computations.
         commandList->usePipelineState(atomScreenQuadBufferComputationPipeline);
         commandList->dispatchCompute((atomDescriptions.size() + 31)/32, 1, 1);
         commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_VERTEX_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
 
-        commandList->beginRenderPass(mainRenderPass, backBuffer, false);
-
+        commandList->beginRenderPass(mainRenderPass, hdrTargetFramebuffer, false);
         commandList->setViewport(0, 0, displayWidth, displayHeight);
         commandList->setScissor(0, 0, displayWidth, displayHeight);
 
         // Atoms
         commandList->usePipelineState(atomDrawPipeline);
         commandList->useShaderResources(samplersBinding);
-        commandList->useShaderResources(screenStateBinding);
+        if(isRightEye)
+            commandList->useShaderResources(rightEyeScreenStateBinding);
+        else
+            commandList->useShaderResources(leftEyeScreenStateBinding);
         commandList->useShaderResources(atomFrontBufferBinding);
         commandList->useShaderResources(atomBoundQuadBufferBinding);
         commandList->drawArrays(4, atomDescriptions.size(), 0, 0);
@@ -1010,19 +1241,21 @@ public:
         commandList->usePipelineState(bondDrawPipeline);
         commandList->drawArrays(4, atomBondDescriptions.size(), 0, 0);
 
-        // UI element pipeline
-        commandList->usePipelineState(uiPipeline);
-        commandList->drawArrays(4, uiElementQuadBuffer.size(), 0, 0);
-
-        // Finish the command list
+        // Finish the hdr rendering
         commandList->endRenderPass();
-        commandList->close();
 
-        // Queue the command list
-        commandQueue->addCommandList(commandList);
+        // Tone mapping output generation
+        if(isRightEye)
+            commandList->beginRenderPass(outputRenderPass, rightEyeFramebuffer, false);
+        else
+            commandList->beginRenderPass(outputRenderPass, leftEyeFramebuffer, false);
+        commandList->setViewport(0, 0, displayWidth, displayHeight);
+        commandList->setScissor(0, 0, displayWidth, displayHeight);
 
-        swapBuffers();
-        commandQueue->finishExecution();
+        commandList->usePipelineState(filmicTonemappingPipeline);
+        commandList->drawArrays(3, 1, 0, 0);
+
+        commandList->endRenderPass();    
     }
 
     void swapBuffers()
@@ -1076,28 +1309,54 @@ public:
     SDL_Window *window = nullptr;
     bool isQuitting = false;
 
-    agpu_texture_format colorBufferFormat = AGPU_TEXTURE_FORMAT_B8G8R8A8_UNORM_SRGB;
+    agpu_texture_format colorBufferFormat = AGPU_TEXTURE_FORMAT_R16G16B16A16_FLOAT;
+    agpu_texture_format swapChainColorBufferFormat = AGPU_TEXTURE_FORMAT_B8G8R8A8_UNORM_SRGB;
     agpu_texture_format depthBufferFormat = AGPU_TEXTURE_FORMAT_D32_FLOAT;
 
     agpu_device_ref device;
     agpu_command_queue_ref commandQueue;
     agpu_renderpass_ref mainRenderPass;
+    agpu_renderpass_ref outputRenderPass;
     agpu_shader_signature_ref shaderSignature;
     agpu_command_allocator_ref commandAllocator;
     agpu_command_list_ref commandList;
     agpu_swap_chain_create_info currentSwapChainCreateInfo;
     agpu_swap_chain_ref swapChain;
 
+    int framebufferDisplayWidth = -1;
+    int framebufferDisplayHeight = -1;
+    agpu_texture_ref depthStencilTexture;
+    agpu_texture_ref hdrTargetTexture;
+    agpu_framebuffer_ref hdrTargetFramebuffer;
+
+    agpu_texture_ref leftEyeTexture;
+    agpu_framebuffer_ref leftEyeFramebuffer;
+
+    agpu_texture_ref rightEyeTexture;
+    agpu_framebuffer_ref rightEyeFramebuffer;
+
     agpu_shader_ref uiElementVertex;
     agpu_shader_ref uiElementFragment;
     agpu_pipeline_state_ref uiPipeline;
 
+    agpu_shader_ref screenQuadVertex;
+    agpu_shader_ref filmicTonemappingFragment;
+    agpu_pipeline_state_ref filmicTonemappingPipeline;
+
+    agpu_shader_ref passthroughFragment;
+    agpu_pipeline_state_ref passthroughPipeline;
+
+    agpu_shader_ref sideBySideFragment;
+    agpu_pipeline_state_ref sideBySidePipeline;
+
     agpu_sampler_ref sampler;
     agpu_shader_resource_binding_ref samplersBinding;
 
-    agpu_buffer_ref cameraStateUniformBuffer;
+    agpu_buffer_ref leftEyeCameraStateUniformBuffer;
+    agpu_buffer_ref rightEyeCameraStateUniformBuffer;
     agpu_buffer_ref uiDataBuffer;
-    agpu_shader_resource_binding_ref screenStateBinding;
+    agpu_shader_resource_binding_ref leftEyeScreenStateBinding;
+    agpu_shader_resource_binding_ref rightEyeScreenStateBinding;
 
     agpu_shader_ref screenBoundQuadVertex;
     agpu_shader_ref atomDrawFragment;
@@ -1140,6 +1399,9 @@ public:
 
     size_t UIElementQuadBufferMaxCapacity = 4192;
     std::vector<UIElementQuad> uiElementQuadBuffer;
+
+    bool isStereo = false;
+    bool isVirtualReality = false;
 
     bool isSimulating = true;
     float simulationTimeStep = 1.0f/60.0f;
