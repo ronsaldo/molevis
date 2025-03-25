@@ -5,12 +5,12 @@
 #include "AtomDescription.hpp"
 #include "AtomState.hpp"
 #include "CameraState.hpp"
-#include "PDBFormat.hpp"
 #include "Vector2.hpp"
 #include "Vector3.hpp"
 #include "Vector4.hpp"
 #include "Matrix4x4.hpp"
 #include "PushConstants.hpp"
+#include <chemfiles.hpp>
 #include <stdint.h>
 #include <stdio.h>
 #include <memory>
@@ -75,8 +75,6 @@ public:
     Mollevis() = default;
     ~Mollevis() = default;
 
-    PDBFile pdbFile;
-
     int main(int argc, const char *argv[])
     {
         bool vsyncDisabled = false;
@@ -133,10 +131,13 @@ public:
         if(!inputFileName.empty())
         {
             isSimulating = false;
-            pdbFile = PDBFile();
-            pdbFile.openAndParsePDBFile(inputFileName);
+            chemfiles::Trajectory file(inputFileName);
+            chemfiles::Frame frame = file.read();
 
-            convertPDBDataset(pdbFile);
+            ///pdbFile = PDBFile();
+            ///pdbFile.openAndParsePDBFile(inputFileName);
+            ///convertPDBDataset(pdbFile);
+            convertChemfileFrame(frame);
 
         }
         else
@@ -249,9 +250,9 @@ public:
             colorAttachment.format = colorBufferFormat;
             colorAttachment.begin_action = AGPU_ATTACHMENT_CLEAR;
             colorAttachment.end_action = AGPU_ATTACHMENT_KEEP;
-            colorAttachment.clear_value.r = 0.0;
-            colorAttachment.clear_value.g = 0.0;
-            colorAttachment.clear_value.b = 0.0;
+            colorAttachment.clear_value.r = 0.1;
+            colorAttachment.clear_value.g = 0.1;
+            colorAttachment.clear_value.b = 0.1;
             colorAttachment.clear_value.a = 0;
             colorAttachment.sample_count = 1;
 
@@ -519,7 +520,7 @@ public:
         return 0;
     }
 
-    void convertPDBDataset(const PDBFile &file)
+    /*void convertPDBDataset(const PDBFile &file)
     {
         Random rand;
         size_t atomCount = file.atoms.size();
@@ -539,6 +540,48 @@ public:
 
             atomDescriptions.push_back(description);
             initialAtomStates.push_back(state);
+        }
+
+    }*/
+
+    void convertChemfileFrame(chemfiles::Frame &frame)
+    {
+        Random rand;
+        const auto &positions = frame.positions();
+        atomDescriptions.reserve(frame.size());
+        initialAtomStates.reserve(frame.size());
+        
+        for(size_t i = 0; i < positions.size(); ++i)
+        {
+            const auto &atomPosition = positions[i];
+
+            auto description = AtomDescription{};
+            // TODO: A color according to the element.
+            description.color = rand.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
+            description.radius = 0.5;
+
+            auto state = AtomState{};
+            state.position = Vector3(atomPosition[0], atomPosition[1], atomPosition[2]);
+
+            atomDescriptions.push_back(description);
+            initialAtomStates.push_back(state);
+        }
+
+        auto& topology = frame.topology();
+        for(auto &bond : topology.bonds())
+        {
+            auto firstAtomIndex = bond[0];
+            auto secondAtomIndex = bond[1];
+
+            auto description = AtomBondDescription{};
+            description.firstAtomIndex = firstAtomIndex;
+            description.secondAtomIndex = secondAtomIndex;
+            description.morseEquilibriumDistance = rand.randFloat(5, 20);
+            description.morseWellDepth = 1;
+            description.morseWellWidth = 1;
+            description.thickness = 0.1;
+            description.color = Vector4{0.8, 0.8, 0.8, 1.0};
+            atomBondDescriptions.push_back(description);
         }
 
     }

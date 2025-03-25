@@ -43,7 +43,10 @@ if(SDL2_INCLUDE_DIRS AND SDL2_LIBRARY AND SDL2_INCLUDE_DIRS)
 	endif()
 endif()
 
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/abstract-gpu/include")
+include_directories(
+    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/abstract-gpu/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/chemfiles/include"
+)
 
 add_subdirectory(thirdparty)
 

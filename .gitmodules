@@ -1,3 +1,6 @@
 [submodule "thirdparty/abstract-gpu"]
 	path = thirdparty/abstract-gpu
 	url = https://github.com/desromech/abstract-gpu
+[submodule "thirdparty/chemfiles"]
+	path = thirdparty/chemfiles
+	url = git@github.com:chemfiles/chemfiles.git
