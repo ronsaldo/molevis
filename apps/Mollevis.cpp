@@ -192,6 +192,9 @@ public:
         agpu_device_open_info openInfo = {};
         openInfo.gpu_index = gpuIndex;
         openInfo.debug_layer = debugLayerEnabled;
+        if(isVirtualReality)
+            openInfo.open_flags = AGPU_DEVICE_OPEN_FLAG_ALLOW_VR;
+
         memset(&currentSwapChainCreateInfo, 0, sizeof(currentSwapChainCreateInfo));
         switch(windowInfo.subsystem)
         {
@@ -250,6 +253,22 @@ public:
 
         displayWidth = swapChain->getWidth();
         displayHeight = swapChain->getHeight();
+
+        if(isVirtualReality)
+        {
+            vrSystem = device->getVRSystem();
+            if(vrSystem)
+            {
+                agpu_size2d targetSize;
+                vrSystem->getRecommendedRenderTargetSize(&targetSize);
+                vrDisplayWidth = targetSize.width;
+                vrDisplayHeight = targetSize.height;
+            }
+            else
+            {
+                isVirtualReality = false;
+            }
+        }
 
         // Create the render pass
         {
@@ -1314,6 +1333,7 @@ public:
     agpu_texture_format depthBufferFormat = AGPU_TEXTURE_FORMAT_D32_FLOAT;
 
     agpu_device_ref device;
+    agpu_vr_system_ref vrSystem;
     agpu_command_queue_ref commandQueue;
     agpu_renderpass_ref mainRenderPass;
     agpu_renderpass_ref outputRenderPass;
@@ -1325,6 +1345,8 @@ public:
 
     int framebufferDisplayWidth = -1;
     int framebufferDisplayHeight = -1;
+    int vrDisplayWidth = -1;
+    int vrDisplayHeight = -1;
     agpu_texture_ref depthStencilTexture;
     agpu_texture_ref hdrTargetTexture;
     agpu_framebuffer_ref hdrTargetFramebuffer;
