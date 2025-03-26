@@ -7,6 +7,7 @@ layout(std140, set = 1, binding = 0) uniform CameraStateBlock
     bool flipVertically;
     float nearDistance;
     float farDistance;
+    float molecularScale;
 
     mat4 projectionMatrix;
     mat4 inverseProjectionMatrix;
@@ -68,8 +69,8 @@ vec3 sdfCapsuleGradient(vec3 p, vec3 a, vec3 b, float r)
 void main()
 {
     AtomBondDesc desc = AtomBondDescriptionBuffer[inBondIndex];
-    vec3 firstAtomWorldPosition = AtomStateBuffer[desc.firstAtomIndex].position;
-    vec3 secondAtomWorldPosition = AtomStateBuffer[desc.secondAtomIndex].position;
+    vec3 firstAtomWorldPosition = AtomStateBuffer[desc.firstAtomIndex].position*CameraState.molecularScale;
+    vec3 secondAtomWorldPosition = AtomStateBuffer[desc.secondAtomIndex].position*CameraState.molecularScale;
 
     float radius = desc.thickness;
     vec3 firstAtomViewPosition = (CameraState.viewMatrix * vec4(firstAtomWorldPosition, 1.0)).xyz;

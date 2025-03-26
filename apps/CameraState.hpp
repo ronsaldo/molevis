@@ -13,6 +13,8 @@ struct CameraState
     float nearDistance = 0.1f;
     float farDistance = 1000.0f;
 
+    float molleculeScaleFactor = 1.0f;
+
     Matrix4x4 projectionMatrix;
     Matrix4x4 inverseProjectionMatrix;
     Matrix4x4 viewMatrix;

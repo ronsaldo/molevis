@@ -7,6 +7,7 @@ layout(std140, set = 1, binding = 0) uniform CameraStateBlock
     bool flipVertically;
     float nearDistance;
     float farDistance;
+    float molecularScale;
 
     mat4 projectionMatrix;
     mat4 inverseProjectionMatrix;
@@ -113,10 +114,10 @@ void main()
     AtomState state = AtomStateBuffer[atomIndex];
 
     // Get the atom world position
-    vec3 worldCenter = state.position;
+    vec3 worldCenter = state.position*CameraState.molecularScale;
 
     // Compute the atom view position center.
-    float radius = desc.radius;
+    float radius = desc.radius*CameraState.molecularScale;
     vec3 viewCenter = (CameraState.viewMatrix * vec4(worldCenter, 1.0)).xyz;
 
     // Only accept spheres that are completely in front of the near plane.

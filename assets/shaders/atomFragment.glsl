@@ -7,6 +7,7 @@ layout(std140, set = 1, binding = 0) uniform CameraStateBlock
     bool flipVertically;
     float nearDistance;
     float farDistance;
+    float molecularScale;
 
     mat4 projectionMatrix;
     mat4 inverseProjectionMatrix;
@@ -66,13 +67,13 @@ bool raySphereTest(float sphereRadius, in vec3 sphereCenter, in vec3 rayDirectio
 void main()
 {
     AtomDescription desc = AtomDescriptionBuffer[inAtomIndex];
-    vec3 worldCenter = AtomStateBuffer[inAtomIndex].position;
+    vec3 worldCenter = AtomStateBuffer[inAtomIndex].position * CameraState.molecularScale;
     vec3 viewCenter = (CameraState.viewMatrix*vec4(worldCenter, 1.0)).xyz;
 
     vec3 D = normalize(inViewPosition);
     vec2 lambdas;
     //raySphereTest(desc.radius, viewCenter, D, lambdas);
-    bool inside = raySphereTest(desc.radius, viewCenter, D, lambdas);
+    bool inside = raySphereTest(desc.radius * CameraState.molecularScale, viewCenter, D, lambdas);
     if (!inside)
         discard;
 

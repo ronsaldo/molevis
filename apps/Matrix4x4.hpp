@@ -16,7 +16,17 @@ struct Matrix4x4
             {am.c3.x, am.c3.y, am.c3.z, am.c3.w},
             {am.c4.x, am.c4.y, am.c4.z, am.c4.w},
         }};
-    };
+    }
+
+    static Matrix4x4 withScaleFactor(float scale)
+    {
+        return Matrix4x4{{
+            {scale, 0, 0, 0},
+            {0, scale, 0, 0},
+            {0, 0, scale, 0},
+            {0, 0, 0, 1},
+        }};
+    }
 
     static Matrix4x4 perspective(float fovy, float aspect, float nearDistanceDistance, float farDistanceDistance, bool flipVertically)
     {

@@ -131,6 +131,10 @@ public:
                 {
                     isSimulating = false;
                 }
+                else if (arg == "-scale-factor")
+                {
+                    scaleFactor = atof(argv[++i]);
+                }                
                 else if (arg == "-stereo")
                 {
                     isStereo = true;
@@ -1158,7 +1162,16 @@ public:
         // Mouse wheel.
         if(hasWheelEvent && !hasHandledWheelEvent)
         {
-            cameraTranslation += cameraMatrix * Vector3(0, 0, -wheelDelta);
+
+            if(wheelDelta >= 1)
+            {
+                scaleFactor *= 1.1;
+            }
+            else
+            {
+                scaleFactor /= 1.1;
+            }
+            //cameraTranslation += cameraMatrix * Vector3(0, 0, -wheelDelta);
         }
 
         char buffer[64];
@@ -1168,8 +1181,9 @@ public:
         auto cameraInverseMatrix = cameraMatrix.transposed();
         auto cameraInverseTranslation = cameraInverseMatrix * -cameraTranslation;
 
+        cameraState.molleculeScaleFactor = scaleFactor;
         cameraState.viewMatrix = Matrix4x4::withMatrix3x3AndTranslation(cameraInverseMatrix, cameraInverseTranslation);
-        cameraState.inverseViewMatrix = Matrix4x4::withMatrix3x3AndTranslation(cameraMatrix, cameraTranslation);
+        cameraState.inverseViewMatrix = cameraState.viewMatrix.inverse();
         cameraState.projectionMatrix = Matrix4x4::perspective(60.0, float(cameraState.screenWidth)/float(cameraState.screenHeight), cameraState.nearDistance, cameraState.farDistance, device->hasTopLeftNdcOrigin());
         cameraState.inverseProjectionMatrix = cameraState.projectionMatrix.inverse();
 
@@ -1189,7 +1203,6 @@ public:
             float farDistance = cameraState.farDistance;
 
             size_t poseCount = vrSystem->getCurrentTrackedDevicePoseCount();
-            printf("Pose count %zu\n", poseCount);
             for(size_t i = 0; i < poseCount; ++i)
             {
                 agpu_vr_tracked_device_pose trackedPose;
@@ -1203,7 +1216,7 @@ public:
 
                 auto headMatrix = Matrix4x4::fromAgpu(trackedPose.device_to_absolute_tracking);
                 hmdCameraState.viewMatrix = headMatrix;
-                hmdCameraState.inverseViewMatrix = hmdCameraState.viewMatrix.inverse();
+                hmdCameraState.inverseViewMatrix = headMatrix.inverse();
             }
 
             leftEyeCameraState = hmdCameraState;
@@ -1509,6 +1522,8 @@ public:
 
     bool isStereo = false;
     bool isVirtualReality = false;
+
+    float scaleFactor = 1.0;
 
     bool isSimulating = true;
     float simulationTimeStep = 1.0f/60.0f;
