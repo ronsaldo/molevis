@@ -1,6 +1,7 @@
 #include "SDL.h"
 #include "SDL_syswm.h"
 #include "AGPU/agpu.hpp"
+#include "AABox.hpp"
 #include "AtomBondDescription.hpp"
 #include "AtomDescription.hpp"
 #include "AtomState.hpp"
@@ -806,6 +807,7 @@ public:
             atomBondDescriptions.push_back(description);
         }
 
+        computeAtomsBoundingBox();
     }
 
     void generateRandomDataset(size_t atomsToGenerate, size_t bondsToGenerate)
@@ -846,6 +848,44 @@ public:
             description.color = rand.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
             atomBondDescriptions.push_back(description);
         }
+        
+        computeAtomsBoundingBox();
+    }
+
+    AABox atomsBoundingBox;
+
+    void computeAtomsBoundingBox()
+    {
+        // Move the atoms to their bounding box center
+        {
+            atomsBoundingBox = AABox::empty();
+            for(auto &atom : initialAtomStates)
+                atomsBoundingBox.insertPoint(atom.position);
+            auto center = atomsBoundingBox.center();
+
+            for(auto &atom : initialAtomStates)
+                atom.position = atom.position - center;
+
+            //printf("center %f %f %f\n", center.x, center.y, center.z);
+            //printf("min %f %f %f\n", atomsBoundingBox.min.x, atomsBoundingBox.min.y, atomsBoundingBox.min.z);
+            //printf("max %f %f %f\n", atomsBoundingBox.max.x, atomsBoundingBox.max.y, atomsBoundingBox.max.z);    
+        }
+        
+        // Recompute the bounding box
+        {
+            atomsBoundingBox = AABox::empty();
+            for(auto &atom : initialAtomStates)
+                atomsBoundingBox.insertPoint(atom.position);
+            auto center = atomsBoundingBox.center();
+
+            for(auto &atom : initialAtomStates)
+                atom.position = atom.position - center;
+
+            //printf("center %f %f %f\n", center.x, center.y, center.z);
+            //printf("min %f %f %f\n", atomsBoundingBox.min.x, atomsBoundingBox.min.y, atomsBoundingBox.min.z);
+            //printf("max %f %f %f\n", atomsBoundingBox.max.x, atomsBoundingBox.max.y, atomsBoundingBox.max.z);    
+        }
+
     }
 
     std::string readWholeFile(const std::string &fileName)

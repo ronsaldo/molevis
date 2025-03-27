@@ -59,7 +59,7 @@ void main()
     vec3 firstAtomWorldPosition = AtomStateBuffer[desc.firstAtomIndex].position*CameraState.molecularScale;
     vec3 secondAtomWorldPosition = AtomStateBuffer[desc.secondAtomIndex].position*CameraState.molecularScale;
 
-    float radius = desc.thickness;
+    float radius = desc.thickness*CameraState.molecularScale;
     vec3 firstAtomViewPosition = (CameraState.viewMatrix * vec4(firstAtomWorldPosition, 1.0)).xyz;
     vec3 secondAtomViewPosition = (CameraState.viewMatrix * vec4(secondAtomWorldPosition, 1.0)).xyz;
 
