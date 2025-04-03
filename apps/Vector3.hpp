@@ -27,6 +27,11 @@ struct alignas(16) Vector3
         return x*o.x + y*o.y + z*o.z;
     }
 
+    float length() const
+    {
+        return sqrt(x*x + y*y + z*z);
+    }
+
     Vector3 operator-() const
     {
         return Vector3{-x, -y, -z};

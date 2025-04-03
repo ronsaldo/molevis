@@ -808,10 +808,20 @@ public:
             auto firstAtomIndex = bond[0];
             auto secondAtomIndex = bond[1];
 
+            const auto &firstAtomDesc = atomDescriptions[firstAtomIndex];
+            const auto &secondAtomDesc = atomDescriptions[secondAtomIndex];
+
+            const auto &firstAtomPosition = initialAtomStates[firstAtomIndex];
+            const auto &secondAtomPosition = initialAtomStates[secondAtomIndex];
+
+            auto atomEquilibriumDistance = (firstAtomPosition.position - secondAtomPosition.position).length();
+            //auto atomEquilibriumDistance = (firstAtomDesc.radius + secondAtomDesc.radius) * 0.5;
+
             auto description = AtomBondDescription{};
             description.firstAtomIndex = firstAtomIndex;
             description.secondAtomIndex = secondAtomIndex;
-            description.morseEquilibriumDistance = rand.randFloat(5, 20);
+            
+            description.morseEquilibriumDistance = atomEquilibriumDistance;
             description.morseWellDepth = 1;
             description.morseWellWidth = 1;
             description.thickness = 0.1;
