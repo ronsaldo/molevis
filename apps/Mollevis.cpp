@@ -535,6 +535,18 @@ public:
             bondDrawPipeline = finishBuildingPipeline(builder);
         }
 
+        {
+            auto builder = device->createPipelineBuilder();
+            builder->setRenderTargetFormat(0, colorBufferFormat);
+            builder->setDepthStencilFormat(depthBufferFormat);
+            builder->setShaderSignature(shaderSignature);
+            builder->attachShader(bondDrawVertex);
+            builder->attachShader(bondDrawFragment);
+            builder->setPrimitiveType(AGPU_TRIANGLE_STRIP);
+            builder->setDepthState(false, false, AGPU_ALWAYS);
+            bondXRayDrawPipeline = finishBuildingPipeline(builder);
+        }
+
         cameraState.flipVertically = device->hasTopLeftNdcOrigin() == device->hasBottomLeftTextureCoordinates();
 
         // Tonemapping
@@ -1063,6 +1075,9 @@ public:
         case ' ':
             isSimulating = !isSimulating;
             break;
+        case 'x':
+            bondXRay = !bondXRay;
+            break;
         default:
             break;
         }
@@ -1395,7 +1410,10 @@ public:
         commandList->drawArrays(4, atomDescriptions.size(), 0, 0);
 
         // Bonds
-        commandList->usePipelineState(bondDrawPipeline);
+        if(bondXRay)
+            commandList->usePipelineState(bondXRayDrawPipeline);
+        else
+            commandList->usePipelineState(bondDrawPipeline);
         commandList->drawArrays(4, atomBondDescriptions.size(), 0, 0);
 
         // Finish the hdr rendering
@@ -1525,6 +1543,8 @@ public:
     agpu_shader_ref bondDrawVertex;
     agpu_shader_ref bondDrawFragment;
     agpu_pipeline_state_ref bondDrawPipeline;
+    agpu_pipeline_state_ref bondXRayDrawPipeline;
+    bool bondXRay = false;
 
     agpu_buffer_ref atomBoundQuadBuffer;
     agpu_pipeline_state_ref atomScreenQuadBufferComputationPipeline;
