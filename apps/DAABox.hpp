@@ -31,6 +31,11 @@ struct DAABox
         return (max - min)*0.5;
     }
 
+    DVector3 extent()
+    {
+        return max - min;
+    }
+
     DVector3 center()
     {
         return min + halfExtent();

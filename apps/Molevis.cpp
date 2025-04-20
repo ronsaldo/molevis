@@ -603,6 +603,21 @@ public:
 
         cameraState.flipVertically = device->hasTopLeftNdcOrigin() == device->hasBottomLeftTextureCoordinates();
 
+        // Floor grid
+        {
+            auto gridVertexShader = compileShaderWithCommonSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/floorGridVertex.glsl", AGPU_VERTEX_SHADER);
+            auto gridFragmentShader = compileShaderWithCommonSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/floorGridFragment.glsl", AGPU_FRAGMENT_SHADER);
+            auto builder = device->createPipelineBuilder();
+            builder->setRenderTargetFormat(0, colorBufferFormat);
+            builder->setDepthStencilFormat(depthBufferFormat);
+            builder->setShaderSignature(shaderSignature);
+            builder->attachShader(gridVertexShader);
+            builder->attachShader(gridFragmentShader);
+            builder->setPrimitiveType(AGPU_TRIANGLE_STRIP);
+            builder->setDepthState(true, false, AGPU_GREATER_EQUAL);
+            floorGridDrawPipeline = finishBuildingPipeline(builder);
+        }
+
         // Tonemapping
         if(cameraState.flipVertically)
             screenQuadVertex = compileShaderWithSourceFile("assets/shaders/screenQuadFlipped.glsl", AGPU_VERTEX_SHADER);
@@ -1034,24 +1049,10 @@ public:
             for(auto &atom : simulationAtomState)
                 atomsBoundingBox.insertPoint(atom.position);
             auto center = atomsBoundingBox.center();
+            auto centerFloor = DVector3(center.x, center.y - atomsBoundingBox.halfExtent().y, center.z);
 
             for(auto &atom : simulationAtomState)
-                atom.position = atom.position - center;
-
-            //printf("center %f %f %f\n", center.x, center.y, center.z);
-            //printf("min %f %f %f\n", atomsBoundingBox.min.x, atomsBoundingBox.min.y, atomsBoundingBox.min.z);
-            //printf("max %f %f %f\n", atomsBoundingBox.max.x, atomsBoundingBox.max.y, atomsBoundingBox.max.z);    
-        }
-        
-        // Recompute the bounding box
-        {
-            atomsBoundingBox = DAABox::empty();
-            for(auto &atom : simulationAtomState)
-                atomsBoundingBox.insertPoint(atom.position);
-            auto center = atomsBoundingBox.center();
-
-            for(auto &atom : simulationAtomState)
-                atom.position = atom.position - center;
+                atom.position = atom.position - centerFloor;
 
             //printf("center %f %f %f\n", center.x, center.y, center.z);
             //printf("min %f %f %f\n", atomsBoundingBox.min.x, atomsBoundingBox.min.y, atomsBoundingBox.min.z);
@@ -1714,6 +1715,10 @@ public:
             commandList->usePipelineState(bondDrawPipeline);
         commandList->drawArrays(4, atomBondDescriptions.size(), 0, 0);
 
+        // Floor grid
+        commandList->usePipelineState(floorGridDrawPipeline);
+        commandList->drawArrays(4, 1, 0, 0);
+
         // Finish the hdr rendering
         commandList->endRenderPass();
 
@@ -1843,6 +1848,8 @@ public:
     agpu_pipeline_state_ref bondDrawPipeline;
     agpu_pipeline_state_ref bondXRayDrawPipeline;
     bool bondXRay = false;
+
+    agpu_pipeline_state_ref floorGridDrawPipeline;
 
     agpu_buffer_ref atomBoundQuadBuffer;
     agpu_pipeline_state_ref atomScreenQuadBufferComputationPipeline;
