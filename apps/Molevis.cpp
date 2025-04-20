@@ -39,9 +39,26 @@ int64_t getMicroseconds()
 
 #endif
 
+double lennardJonesPotential(double r, double sigma, double epsilon)
+{
+    return 4*epsilon*(pow(sigma/r, 12) - pow(sigma/r, 6));
+}
+
 double lennardJonesDerivative(double r, double sigma, double epsilon)
 {
     return 24*epsilon*(pow(sigma, 6)/pow(r, 7) - 2.0*pow(sigma, 12)/pow(r, 13));
+}
+
+double morsePotential(float r, float De, float a, float re)
+{
+    double interior = (1 - exp(-a*(r - re)));
+    return De*interior*interior;
+}
+
+float morsePotentialDerivative(float r, float De, float a, float re)
+{
+    float innerExp = exp(-a*(r - re));
+    return -2.0*a*De*(1.0 - innerExp)*innerExp;
 }
 
 struct UIElementQuad
@@ -865,8 +882,8 @@ public:
             const auto &firstAtomPosition = renderingAtomState[firstAtomIndex];
             const auto &secondAtomPosition = renderingAtomState[secondAtomIndex];
 
-            auto atomEquilibriumDistance = (firstAtomPosition.position - secondAtomPosition.position).length();
-            //auto atomEquilibriumDistance = (firstAtomDesc.radius + secondAtomDesc.radius) * 0.5;
+            //auto atomEquilibriumDistance = (firstAtomPosition.position - secondAtomPosition.position).length();
+            auto atomEquilibriumDistance = firstAtomDesc.radius + secondAtomDesc.radius;
 
             auto description = AtomBondDescription{};
             description.firstAtomIndex = firstAtomIndex;
@@ -1329,6 +1346,20 @@ public:
                     firstAtomState.netForce = firstAtomState.netForce + force;
                 }
             }
+        }
+
+        // Morse bond
+        for(auto &bond : atomBondDescriptions)
+        {
+            auto &firstAtomState = simulationAtomState[bond.firstAtomIndex];
+            auto &secondAtomState = simulationAtomState[bond.secondAtomIndex];
+
+            auto direction = firstAtomState.position - secondAtomState.position;
+            auto distance = direction.length();
+            auto normalizedDirection = direction / distance;
+            auto force = -normalizedDirection*morsePotentialDerivative(distance, bond.morseWellDepth, bond.morseWellWidth, bond.morseEquilibriumDistance);
+            firstAtomState.netForce = firstAtomState.netForce + force;
+            secondAtomState.netForce = secondAtomState.netForce - force;
         }
         
         // Integrate the atoms
