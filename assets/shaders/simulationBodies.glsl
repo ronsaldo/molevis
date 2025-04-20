@@ -50,12 +50,9 @@ layout(push_constant) uniform PushConstants
     uint bondCount;
 };
 
-float lennardJonesDerivative(float ir, float epsilon, float sigma)
+float lennardJonesDerivative(float r, float sigma, float epsilon)
 {
-    float sigma_ir = sigma * ir;
-    float sigma_ir6 = pow(sigma_ir, 6.0);
-    float sigma_ir12 = sigma_ir6*sigma_ir6;
-    return 24.0*epsilon*(sigma_ir6 - 2.0*sigma_ir12) * ir;
+    return 24*epsilon*(pow(sigma, 6)/pow(r, 7) - 2.0*pow(sigma, 12)/pow(r, 13));
 }
 
 float morsePotentialDerivative(float r, float D, float a, float re)
@@ -79,7 +76,7 @@ void main()
 {
     uint myAtomIndex = gl_GlobalInvocationID.x;
     vec3 myAtomPosition = AtomStateBuffer[myAtomIndex].position;
-    vec3 myNetForce = AtomStateBuffer[myAtomIndex].netForce;
+    vec3 myNetForce = vec3(0.0);//AtomStateBuffer[myAtomIndex].netForce;
 
     // Lennard-jones potential.
     for(uint firstAtomTileIndex = 0u; firstAtomTileIndex < atomCount; firstAtomTileIndex += TileSize)
@@ -111,10 +108,8 @@ void main()
             float dist = length(direction);
             if(dist > 0.000001)
             {
-                float invDist = 1.0 / dist;
-                direction *= invDist;
-
-                vec3 force = -direction * lennardJonesDerivative(invDist, coefficients.x, coefficients.y);
+                direction /= dist;
+                vec3 force = -direction * lennardJonesDerivative(dist, coefficients.x, coefficients.y);
                 myNetForce += force;
             }
         }
@@ -123,6 +118,7 @@ void main()
     }
 
     // Bond morse potential.
+    /*
     for(uint bondTileIndex = 0u; bondTileIndex < bondCount; bondTileIndex += TileSize)
     {
         uint fetchTileElementIndex = gl_LocalInvocationID.x;
@@ -168,7 +164,7 @@ void main()
         }
 
         barrier();
-    }
+    }*/
 
     AtomStateBuffer[myAtomIndex].netForce = myNetForce;
 }

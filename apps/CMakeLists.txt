@@ -1,6 +1,6 @@
-set(Mollevis_Sources
-    Mollevis.cpp
+set(Molevis_Sources
+    Molevis.cpp
 )
 
-add_executable(Mollevis ${Mollevis_Sources})
-target_link_libraries(Mollevis chemfiles Agpu ${SDL2_LIBRARY})
+add_executable(Molevis ${Molevis_Sources})
+target_link_libraries(Molevis chemfiles Agpu ${SDL2_LIBRARY})

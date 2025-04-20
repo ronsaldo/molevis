@@ -95,7 +95,7 @@ public:
         agpu_uint platformIndex = 0;
         agpu_uint gpuIndex = 0;
         int randomAtomCount = 1000;
-        int randomBondCount = 200;
+        int randomBondCount = 0;
         initializeAtomColorConventions();
         std::string inputFileName;
 
@@ -163,6 +163,7 @@ public:
         }
         else
         {
+            //generateTestDataset();
             generateRandomDataset(randomAtomCount, randomBondCount);
         }
 
@@ -832,6 +833,34 @@ public:
         computeAtomsBoundingBox();
     }
 
+    void generateTestDataset()
+    {
+        atomDescriptions.reserve(2);
+        initialAtomStates.reserve(2);
+
+        auto description = AtomDescription{};
+        description.radius= 1.0;
+        description.mass = 1.0;
+        description.lennardJonesEpsilon = 1;
+        description.lennardJonesSigma = 1;
+        description.color = Vector4(1.0, 0, 0, 1);
+        atomDescriptions.push_back(description);
+        atomDescriptions.push_back(description);
+        
+        {
+            auto state = AtomState{};
+            state.position = Vector3(-1, 0.0, 0.0);
+            initialAtomStates.push_back(state);
+        }
+
+        {
+            auto state = AtomState{};
+            state.position = Vector3(1, 0.0, 0.0);
+            initialAtomStates.push_back(state);
+        }
+
+    }
+
     void generateRandomDataset(size_t atomsToGenerate, size_t bondsToGenerate)
     {
         Random rand;
@@ -843,11 +872,12 @@ public:
             auto description = AtomDescription{};
             auto state = AtomState{};
 
-            description.lennardJonesEpsilon = rand.randFloat(1, 5);
-            description.lennardJonesSigma = rand.randFloat(1, 5);
-            description.radius = rand.randFloat(0.5, 2);
+            description.lennardJonesEpsilon = 1.0;//rand.randFloat(1, 5);
+            description.lennardJonesSigma = 1.0;//rand.randFloat(1, 5);
+            description.radius = 1.0;//rand.randFloat(0.5, 2);
             description.color = rand.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
-            state.position = rand.randVector3(-100, 100);
+            description.mass = 1.0;
+            state.position = rand.randVector3(-10, 10);
 
             atomDescriptions.push_back(description);
             initialAtomStates.push_back(state);
