@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "AtomDescription.hpp"
 #include <stdio.h>
 #include <istream>
 #include <fstream>
@@ -27,6 +28,9 @@ struct PeriodicTableRecord
     int period = 0;
     int group = 0;
     double atomicRadius = 1.0f;
+    double lennardJonesCutoff = 1.0f;
+    double lennardJonesEpsilon = 1.0f;
+    double lennardJonesSigma = 1.0f;
 };
 
 inline std::vector<std::string> tokenizeCSV(const std::string &line, char delimiter = ',')
@@ -53,6 +57,33 @@ inline std::vector<std::string> tokenizeCSV(const std::string &line, char delimi
 
 struct PeriodicTable
 {
+    PeriodicTableRecord *getElementRecordForSymbol(const std::string &symbol)
+    {
+        auto it = atomicSymbolMap.find(symbol);
+        if(it != atomicSymbolMap.end())
+            return elements.data() + it->second;
+
+        return nullptr;
+    }
+
+    AtomDescription makeAtomDescriptionForSymbol(const std::string &symbol)
+    {
+        AtomDescription desc = {};
+        auto record = getElementRecordForSymbol(symbol);
+        if(record)
+        {
+            desc.atomNumber = record->atomicNumber;
+            desc.radius = record->atomicRadius;
+            desc.mass = record->atomicMass;
+
+            desc.lennardJonesCutoff = record->lennardJonesCutoff;
+            desc.lennardJonesEpsilon = record->lennardJonesEpsilon;
+            desc.lennardJonesSigma = record->lennardJonesSigma;
+        }
+
+        return desc;
+    }
+
     bool loadFromFile(const std::string &filename)
     {
         std::ifstream in("assets/datasets/periodic-table-of-elements.csv");

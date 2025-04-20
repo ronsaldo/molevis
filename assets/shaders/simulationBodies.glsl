@@ -11,7 +11,9 @@ float morsePotentialDerivative(float r, float D, float a, float re)
 
 const uint TileSize = 32u;
 shared vec3 tileAtomPositions[TileSize];
-shared vec2 tileAtomCoefficients[TileSize];
+shared float tileAtomLennardJonesCutoff[TileSize];
+shared float tileAtomLennardJonesEpsilon[TileSize];
+shared float tileAtomLennardJonesSigma[TileSize];
 
 shared uint tileBondFirstAtomIndex[TileSize];
 shared uint tileBondSecondAtomIndex[TileSize];
@@ -24,7 +26,10 @@ void main()
 {
     uint myAtomIndex = gl_GlobalInvocationID.x;
     vec3 myAtomPosition = AtomStateBuffer[myAtomIndex].position;
-    vec3 myNetForce = vec3(0.0);//AtomStateBuffer[myAtomIndex].netForce;
+    vec3 myNetForce = AtomStateBuffer[myAtomIndex].netForce;
+    float myLennardJonesCutoff = AtomDescriptionBuffer[myAtomIndex].lennardJonesCutoff;
+    float myLennardJonesEpsilon = AtomDescriptionBuffer[myAtomIndex].lennardJonesEpsilon;
+    float myLennardJonesSigma = AtomDescriptionBuffer[myAtomIndex].lennardJonesSigma;
 
     // Lennard-jones potential.
     for(uint firstAtomTileIndex = 0u; firstAtomTileIndex < atomCount; firstAtomTileIndex += TileSize)
@@ -34,7 +39,9 @@ void main()
         if(fetchAtomIndex < atomCount)
         {
             tileAtomPositions[fetchTileElementIndex] = AtomStateBuffer[fetchAtomIndex].position;
-            tileAtomCoefficients[fetchTileElementIndex] = AtomDescriptionBuffer[fetchAtomIndex].lennardJonesCoefficients;
+            tileAtomLennardJonesCutoff[fetchTileElementIndex] = AtomDescriptionBuffer[fetchAtomIndex].lennardJonesCutoff;
+            tileAtomLennardJonesEpsilon[fetchTileElementIndex] = AtomDescriptionBuffer[fetchAtomIndex].lennardJonesEpsilon;
+            tileAtomLennardJonesSigma[fetchTileElementIndex] = AtomDescriptionBuffer[fetchAtomIndex].lennardJonesSigma;
         }
         barrier();
 
@@ -50,14 +57,21 @@ void main()
 
             // Fetch the first position and the lennard jones coefficients.
             vec3 firstPosition = tileAtomPositions[tileElementIndex];
-            vec2 coefficients = tileAtomCoefficients[tileElementIndex];
+
+            float firstLennardJonesCutoff = tileAtomLennardJonesCutoff[tileElementIndex];
+            float firstLennardJonesEpsilon = tileAtomLennardJonesEpsilon[tileElementIndex];
+            float firstLennardJonesSigma = tileAtomLennardJonesEpsilon[tileElementIndex];
+
+            float lennardJonesCutoff = max(firstLennardJonesCutoff, myLennardJonesCutoff);
+            float lennardJonesEpsilon = sqrt(firstLennardJonesEpsilon*myLennardJonesEpsilon);
+            float lennardJonesSigma = (firstLennardJonesSigma + myLennardJonesSigma) * 0.5;
 
             vec3 direction = secondPosition - firstPosition;
             float dist = length(direction);
-            if(dist > 0.000001)
+            if(dist > 0.000001 /*&& dist < lennardJonesCutoff*/)
             {
                 direction /= dist;
-                vec3 force = -direction * lennardJonesDerivative(dist, coefficients.x, coefficients.y);
+                vec3 force = -direction * lennardJonesDerivative(dist, lennardJonesSigma, lennardJonesEpsilon);
                 myNetForce += force;
             }
         }

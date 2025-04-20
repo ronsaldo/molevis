@@ -8,7 +8,7 @@ struct AtomDescription
     int atomNumber;
     float radius;
     float mass;
-    int padding;
+    float lennardJonesCutoff;
 
     float lennardJonesEpsilon;
     float lennardJonesSigma;

@@ -20,7 +20,9 @@ struct AtomDescription
     int atomNumber;
     float radius;
     float mass;
-    vec2 lennardJonesCoefficients;
+    float lennardJonesCutoff;
+    float lennardJonesEpsilon;
+    float lennardJonesSigma;
     vec4 color;
 };
 

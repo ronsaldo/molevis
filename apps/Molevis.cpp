@@ -3,6 +3,7 @@
 #include "AGPU/agpu.hpp"
 #include "AABox.hpp"
 #include "PeriodicTable.hpp"
+#include "LennardJonesTable.hpp"
 #include "AtomBondDescription.hpp"
 #include "AtomDescription.hpp"
 #include "AtomState.hpp"
@@ -761,7 +762,7 @@ public:
 
     void initializeAtomColorConventions()
     {
-        atomTypeColorMap["H"] = Vector4(0.9, 0.9, 0.9, 1.0);
+        atomTypeColorMap["H"] = Vector4(0.4, 0.4, 0.4, 1.0);
         atomTypeColorMap["C"] = Vector4(0.01, 0.01, 0.01, 1.0);
         atomTypeColorMap["N"] = Vector4(0.3, 0.3, 0.8, 1.0);
         atomTypeColorMap["O"] = Vector4(1.0, 0.0, 0.0, 1.0);
@@ -769,11 +770,18 @@ public:
 
     void loadPeriodicTable()
     {
-        if(!periodicTable.loadFromFile("assets/datsets/periodic-table-of-elements.csv"))
+        if(!periodicTable.loadFromFile("assets/datasets/periodic-table-of-elements.csv"))
         {
             fprintf(stderr, "Failed to load periodic table dataset.\n");
             abort();
         }
+
+        if(!LennardJonesTable().loadFromFile("assets/datasets/lennard-jones-table.csv", periodicTable))
+        {
+            fprintf(stderr, "Failed to load lennard-jones coefficient table.\n");
+            abort();
+        }
+
     }
 
     Vector4 getOrCreateColorForAtomType(const std::string &type)
@@ -856,34 +864,31 @@ public:
         atomDescriptions.reserve(3);
         initialAtomStates.reserve(3);
 
-        auto description = AtomDescription{};
-        description.atomNumber = 1;
-        description.radius= 1.0;
-        description.mass = 1.0;
-        description.lennardJonesEpsilon = 1;
-        description.lennardJonesSigma = 1;
-        description.color = Vector4(1.0, 0, 0, 1);
+        auto description = periodicTable.makeAtomDescriptionForSymbol("H");
+        description.color = getOrCreateColorForAtomType("H");
+        //description.lennardJonesEpsilon = 1;
+        //description.lennardJonesSigma = 1;
         atomDescriptions.push_back(description);
         atomDescriptions.push_back(description);
-        atomDescriptions.push_back(description);
+        //atomDescriptions.push_back(description);
         
         {
             auto state = AtomState{};
-            state.position = Vector3(-1, 0.0, 0.0);
+            state.position = Vector3(-1.5, 0.0, 0.0);
             initialAtomStates.push_back(state);
         }
 
         {
             auto state = AtomState{};
-            state.position = Vector3(1, 0.0, 0.0);
+            state.position = Vector3(1.5, 0.0, 0.0);
             initialAtomStates.push_back(state);
         }
 
-        {
+        /*{
             auto state = AtomState{};
             state.position = Vector3(0, 2.0, 0.0);
             initialAtomStates.push_back(state);
-        }
+        }*/
 
     }
 
