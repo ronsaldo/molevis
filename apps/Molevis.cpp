@@ -1881,7 +1881,7 @@ public:
     CameraState cameraState;
     Matrix3x3 cameraMatrix = Matrix3x3::identity();
     Vector3 cameraAngle = Vector3{0, 0, 0};
-    Vector3 cameraTranslation = Vector3{0, 0, 5};
+    Vector3 cameraTranslation = Vector3{0, 1, 5};
 
     size_t UIElementQuadBufferMaxCapacity = 4192;
     std::vector<UIElementQuad> uiElementQuadBuffer;
