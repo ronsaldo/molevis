@@ -1,39 +1,6 @@
-#version 450
-
-struct AtomState
-{
-    vec3 position;
-    vec3 velocity;
-    vec3 netForce;
-};
-
-struct AtomDescription
-{
-    float radius;
-    float mass;
-    vec2 lennardJonesCoefficients;
-    vec4 color;
-};
+#line 2
 
 layout(local_size_x = 32) in;
-
-layout(std430, set = 2, binding = 0) buffer AtomDescriptionBufferBlock
-{
-    AtomDescription AtomDescriptionBuffer[];
-};
-
-
-layout(std430, set = 2, binding = 3) buffer AtomStateBufferBlock
-{
-    AtomState AtomStateBuffer[];
-};
-
-layout(push_constant) uniform PushConstants
-{
-    float timeStep;
-    uint atomCount;
-    uint bondCount;
-};
 
 vec3 floorMod(vec3 position, float scale)
 {

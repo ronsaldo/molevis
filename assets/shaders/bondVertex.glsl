@@ -1,47 +1,4 @@
-#version 450
-
-layout(std140, set = 1, binding = 0) uniform CameraStateBlock
-{
-    uvec2 screenSize;
-
-    bool flipVertically;
-    float nearDistance;
-    float farDistance;
-    float molecularScale;
-
-    mat4 projectionMatrix;
-    mat4 inverseProjectionMatrix;
-    mat4 viewMatrix;
-    mat4 inverseViewMatrix;
-} CameraState;
-
-struct AtomBondDesc
-{
-    uint firstAtomIndex;
-    uint secondAtomIndex;
-    float morseEquilibriumDistance;
-    float morseWellDepth;
-    float morseWellWidth;
-    float thickness;
-    vec4 color;
-};
-
-struct AtomState
-{
-    vec3 position;
-    vec3 velocity;
-    vec3 netForce;
-};
-
-layout(std430, set = 2, binding = 1) buffer AtomBondDescriptionBufferBlock
-{
-    AtomBondDesc AtomBondDescriptionBuffer[];
-};
-
-layout(std430, set = 2, binding = 2) buffer AtomStateBufferBlock
-{
-    AtomState AtomStateBuffer[];
-};
+#line 2
 
 layout(location = 0) flat out uint outBondIndex;
 layout(location = 1) out vec3 outViewPosition;

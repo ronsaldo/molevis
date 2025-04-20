@@ -1,23 +1,6 @@
-#version 450
-
-struct AtomState
-{
-    vec3 position;
-    vec3 velocity;
-    vec3 netForce;
-};
+#line 2
 
 layout(local_size_x = 32) in;
-
-layout(std430, set = 2, binding = 2) buffer OldAtomStateBufferBlock
-{
-    AtomState OldAtomStateBuffer[];
-};
-
-layout(std430, set = 2, binding = 3) buffer NewAtomStateBufferBlock
-{
-    AtomState NewAtomStateBuffer[];
-};
 
 void main()
 {
@@ -30,5 +13,5 @@ void main()
     state.netForce = vec3(0.0);
 
     // Store the reseted new state.
-    NewAtomStateBuffer[atomIndex] = state;
+    AtomStateBuffer[atomIndex] = state;
 }

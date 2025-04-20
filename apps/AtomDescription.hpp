@@ -8,8 +8,11 @@ struct AtomDescription
     int atomNumber;
     float radius;
     float mass;
+    int padding;
+
     float lennardJonesEpsilon;
     float lennardJonesSigma;
+
     Vector4 color;
 };
 

@@ -1,44 +1,4 @@
-#version 450
-
-layout(std140, set = 1, binding = 0) uniform CameraStateBlock
-{
-    uvec2 screenSize;
-
-    bool flipVertically;
-    float nearDistance;
-    float farDistance;
-    float molecularScale;
-
-    mat4 projectionMatrix;
-    mat4 inverseProjectionMatrix;
-    mat4 viewMatrix;
-    mat4 inverseViewMatrix;
-} CameraState;
-
-struct AtomDescription
-{
-    float radius;
-    float mass;
-    vec2 lennardJonesCoefficients;
-    vec4 color;
-};
-
-struct AtomState
-{
-    vec3 position;
-    vec3 velocity;
-    vec3 netForce;
-};
-
-layout(std430, set = 2, binding = 0) buffer AtomDescriptionBufferBlock
-{
-    AtomDescription AtomDescriptionBuffer[];
-};
-
-layout(std430, set = 2, binding = 2) buffer AtomStateBufferBlock
-{
-    AtomState AtomStateBuffer[];
-};
+#line 2
 
 layout(location=0) flat in uint inAtomIndex;
 layout(location=1) in vec3 inViewPosition;

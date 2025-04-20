@@ -1,30 +1,4 @@
-#version 450
-
-layout(std140, set = 1, binding = 0) uniform CameraStateBlock
-{
-    uvec2 screenSize;
-
-    bool flipVertically;
-    float nearDistance;
-    float farDistance;
-
-    mat4 projectionMatrix;
-    mat4 inverseProjectionMatrix;
-    mat4 viewMatrix;
-    mat4 inverseViewMatrix;
-} CameraState;
-
-struct ScreenBoundingQuad
-{
-    vec3 quadMin;
-    bool inFrustum;
-    vec3 quadMax;
-};
-
-layout(std430, set = 3, binding = 0) buffer ScreenBoundingQuadBufferBlock
-{
-    ScreenBoundingQuad ScreenBoundingQuadBuffer[];
-};
+#line 2
 
 layout(location = 0) flat out uint outAtomIndex;
 layout(location = 1) out vec3 outViewPosition;

@@ -1,59 +1,7 @@
-#version 450
-
-struct AtomDescription
-{
-    float radius;
-    float mass;
-    vec2 lennardJonesCoefficients;
-    vec4 color;
-};
-
-struct AtomBondDesc
-{
-    uint firstAtomIndex;
-    uint secondAtomIndex;
-    float morseEquilibriumDistance;
-    float morseWellDepth;
-    float morseWellWidth;
-    float thickness;
-    vec4 color;
-};
-
-struct AtomState
-{
-    vec3 position;
-    vec3 velocity;
-    vec3 netForce;
-};
+#line 2
 
 layout(local_size_x = 32) in;
 
-layout(std430, set = 2, binding = 0) buffer AtomDescriptionBufferBlock
-{
-    AtomDescription AtomDescriptionBuffer[];
-};
-
-layout(std430, set = 2, binding = 1) buffer AtomBondDescriptionBufferBlock
-{
-    AtomBondDesc AtomBondDescriptionBuffer[];
-};
-
-layout(std430, set = 2, binding = 3) buffer AtomStateBufferBlock
-{
-    AtomState AtomStateBuffer[];
-};
-
-layout(push_constant) uniform PushConstants
-{
-    float timeStep;
-    uint atomCount;
-    uint bondCount;
-};
-
-float lennardJonesDerivative(float r, float sigma, float epsilon)
-{
-    return 24*epsilon*(pow(sigma, 6)/pow(r, 7) - 2.0*pow(sigma, 12)/pow(r, 13));
-}
 
 float morsePotentialDerivative(float r, float D, float a, float re)
 {

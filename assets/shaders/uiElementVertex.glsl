@@ -1,35 +1,4 @@
-#version 450
-
-layout(std140, set = 1, binding = 0) uniform CameraStateBlock
-{
-    uvec2 screenSize;
-
-    bool flipVertically;
-    float nearDistance;
-    float farDistance;
-
-    mat4 projectionMatrix;
-    mat4 inverseProjectionMatrix;
-    mat4 viewMatrix;
-    mat4 inverseViewMatrix;
-} CameraState;
-
-struct UIElementQuad
-{
-    vec2 position;
-    vec2 size;
-    vec4 color;
-    
-    bool isGlyph;
-
-    vec2 fontPosition;
-    vec2 fontSize;
-};
-
-layout(std430, set = 1, binding = 1) buffer UIDataBufferBlock
-{
-    UIElementQuad UIDataBuffer[];
-};
+#line 2
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec2 outQuadCoord;

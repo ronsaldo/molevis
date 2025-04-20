@@ -499,18 +499,18 @@ public:
         }
 
         // Simulation pipelines
-        simulationResetTimeStepPipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/simulationResetTimeStep.glsl");
-        simulationBodiesPipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/simulationBodies.glsl");
-        simulationIntegratePipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/simulationIntegrate.glsl");
+        simulationResetTimeStepPipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/simulationResetTimeStep.glsl");
+        simulationBodiesPipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/simulationBodies.glsl");
+        simulationIntegratePipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/simulationIntegrate.glsl");
 
         // Atom screen quad computation shader
-        atomScreenQuadBufferComputationPipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/atomScreenQuadComputation.glsl");
+        atomScreenQuadBufferComputationPipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/atomScreenQuadComputation.glsl");
 
         // Atom and bond draw pipeline state.
-        screenBoundQuadVertex = compileShaderWithSourceFile("assets/shaders/screenBoundQuadVertex.glsl", AGPU_VERTEX_SHADER);
-        atomDrawFragment = compileShaderWithSourceFile("assets/shaders/atomFragment.glsl", AGPU_FRAGMENT_SHADER);
-        bondDrawVertex = compileShaderWithSourceFile("assets/shaders/bondVertex.glsl", AGPU_VERTEX_SHADER);
-        bondDrawFragment = compileShaderWithSourceFile("assets/shaders/bondFragment.glsl", AGPU_FRAGMENT_SHADER);
+        screenBoundQuadVertex = compileShaderWithCommonSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/screenBoundQuadVertex.glsl", AGPU_VERTEX_SHADER);
+        atomDrawFragment = compileShaderWithCommonSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/atomFragment.glsl", AGPU_FRAGMENT_SHADER);
+        bondDrawVertex = compileShaderWithCommonSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/bondVertex.glsl", AGPU_VERTEX_SHADER);
+        bondDrawFragment = compileShaderWithCommonSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/bondFragment.glsl", AGPU_FRAGMENT_SHADER);
         if(!screenBoundQuadVertex || !atomDrawFragment || !bondDrawVertex || !bondDrawFragment)
             return 1;
 
@@ -606,7 +606,7 @@ public:
         rightEyeScreenStateBinding->bindSampledTextureView(2, bitmapFont->getOrCreateFullView());
 
         // UI pipeline state.
-        uiElementVertex = compileShaderWithSourceFile("assets/shaders/uiElementVertex.glsl", AGPU_VERTEX_SHADER);
+        uiElementVertex = compileShaderWithCommonSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/uiElementVertex.glsl", AGPU_VERTEX_SHADER);
         uiElementFragment = compileShaderWithSourceFile("assets/shaders/uiElementFragment.glsl", AGPU_FRAGMENT_SHADER);
 
         createIntermediateTexturesAndFramebuffer();
@@ -854,6 +854,7 @@ public:
         initialAtomStates.reserve(3);
 
         auto description = AtomDescription{};
+        description.atomNumber = 1;
         description.radius= 1.0;
         description.mass = 1.0;
         description.lennardJonesEpsilon = 1;
@@ -994,6 +995,11 @@ public:
         return compileShaderWithSource(sourceFileName, readWholeFile(sourceFileName), type);
     }
 
+    agpu_shader_ref compileShaderWithCommonSourceFile(const std::string &commonSourceFile, const std::string &sourceFileName, agpu_shader_type type)
+    {
+        return compileShaderWithSource(sourceFileName, readWholeFile(commonSourceFile) + readWholeFile(sourceFileName), type);
+    }
+
     agpu_shader_ref compileShaderWithSource(const std::string &name, const std::string &source, agpu_shader_type type)
     {
         if(source.empty())
@@ -1026,9 +1032,9 @@ public:
         return pipeline;
     }
 
-    agpu_pipeline_state_ref compileAndBuildComputeShaderPipelineWithSourceFile(const std::string &filename)
+    agpu_pipeline_state_ref compileAndBuildComputeShaderPipelineWithSourceFile(const std::string &commonSourceFilename, const std::string &filename)
     {
-        auto shader = compileShaderWithSourceFile(filename, AGPU_COMPUTE_SHADER);
+        auto shader = compileShaderWithCommonSourceFile(commonSourceFilename, filename, AGPU_COMPUTE_SHADER);
         auto builder = device->createComputePipelineBuilder();
         builder->setShaderSignature(shaderSignature);
         builder->attachShader(shader);
