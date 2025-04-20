@@ -27,6 +27,11 @@ struct alignas(32) DVector3
         return x*o.x + y*o.y + z*o.z;
     }
 
+    double length2() const
+    {
+        return x*x + y*y + z*z;
+    }
+
     double length() const
     {
         return sqrt(x*x + y*y + z*z);

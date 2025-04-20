@@ -39,6 +39,11 @@ int64_t getMicroseconds()
 
 #endif
 
+// Units simulationTimeStep
+constexpr double SimulationTimeStep = 0.001; // Picoseconds
+constexpr double BoltzmannConstantSI = 1.380649e-23; // m^2.K^-1
+constexpr double TargetTemperature = 10; // Kelvin
+
 double lennardJonesPotential(double r, double sigma, double epsilon)
 {
     return 4*epsilon*(pow(sigma/r, 12) - pow(sigma/r, 6));
@@ -1339,17 +1344,20 @@ public:
 
                 DVector3 direction = firstPosition - secondPosition;
                 auto dist = direction.length();
-                if(1e-12 < dist && dist < lennardJonesCutoff)
+                if(1e-6 < dist && dist < lennardJonesCutoff)
                 {
                     auto normalizedDirection = direction / dist;
-                    auto force = -normalizedDirection * lennardJonesDerivative(dist, lennardJonesSigma, lennardJonesEpsilon);
+                    auto force = -normalizedDirection * lennardJonesDerivative(std::max(dist, 1.0), lennardJonesSigma, lennardJonesEpsilon);
                     firstAtomState.netForce = firstAtomState.netForce + force;
+
+                    //if(i == 94 && j == 95)
+                    //    printf("Dist %zu %zu: %f\n", i, j, dist);
                 }
             }
         }
 
         // Morse bond
-        for(auto &bond : atomBondDescriptions)
+        /*for(auto &bond : atomBondDescriptions)
         {
             auto &firstAtomState = simulationAtomState[bond.firstAtomIndex];
             auto &secondAtomState = simulationAtomState[bond.secondAtomIndex];
@@ -1357,20 +1365,34 @@ public:
             auto direction = firstAtomState.position - secondAtomState.position;
             auto distance = direction.length();
             auto normalizedDirection = direction / distance;
-            auto force = -normalizedDirection*morsePotentialDerivative(distance, bond.morseWellDepth, bond.morseWellWidth, bond.morseEquilibriumDistance);
+            auto force = -normalizedDirection*morsePotentialDerivative(distan   ce, bond.morseWellDepth, bond.morseWellWidth, bond.morseEquilibriumDistance);
             firstAtomState.netForce = firstAtomState.netForce + force;
             secondAtomState.netForce = secondAtomState.netForce - force;
-        }
+        }*/
         
-        // Integrate the atoms
+        // Integrate the velocites and compute total kinetic energy.
+        double totalKineticEnergy = 0.0;
         for(size_t i = 0; i < simulationAtomState.size(); ++i)
         {
             auto &state = simulationAtomState[i];
-            auto acceleration = state.netForce / atomDescriptions[i].mass;
+            auto mass = atomDescriptions[i].mass;
+            auto acceleration = state.netForce / mass;
+            //printf("%zu %f %f %f\n", i, state.netForce.x, state.netForce.y, state.netForce.z);
             state.velocity = state.velocity + acceleration*timestep;
-            state.position = state.position + state.velocity*timestep;
+            totalKineticEnergy = totalKineticEnergy + 0.5*mass*state.velocity.length2();
         }
 
+        // Compute the average kinetic energy.
+        double averageKineticEnergy = totalKineticEnergy / double(simulationAtomState.size());
+        //printf("total kinetic %f average %f\n", totalKineticEnergy, averageKineticEnergy);;
+
+        // Integrate the positions
+        for(size_t i = 0; i < simulationAtomState.size(); ++i)
+        {
+            auto &state = simulationAtomState[i];
+            state.position = state.position + state.velocity*timestep;
+        }
+        
         // Upload the new state
         for(size_t i = 0; i < simulationAtomState.size(); ++i)
             renderingAtomState[i] = simulationAtomState[i].asRenderingState();
@@ -1455,7 +1477,7 @@ public:
         PushConstants pushConstants = {};
         pushConstants.atomCount = atomDescriptions.size();
         pushConstants.bondCount = atomBondDescriptions.size();
-        pushConstants.timeStep = simulationTimeStep;
+        pushConstants.timeStep = SimulationTimeStep;
 
         auto hmdCameraState = cameraState;
         auto leftEyeCameraState = hmdCameraState;
@@ -1526,12 +1548,7 @@ public:
 
         if(isSimulating && shouldSimulateInCPU)
         {
-            accumulatedTimeToSimulate += delta;
-            if(accumulatedTimeToSimulate >= simulationTimeStep)
-            {
-                simulateInCPU(simulationTimeStep);
-                accumulatedTimeToSimulate -= simulationTimeStep;
-            }
+            simulateInCPU(SimulationTimeStep);
         }
 
         // Build the command list
@@ -1548,12 +1565,7 @@ public:
         // Are we simulating in GPU?
         if(isSimulating && !shouldSimulateInCPU)
         {
-            accumulatedTimeToSimulate += delta;
-            if(accumulatedTimeToSimulate >= simulationTimeStep)
-            {
-                emitSimulationStepCommands();
-                accumulatedTimeToSimulate -= simulationTimeStep;
-            }
+            emitSimulationStepCommands();
         }
 
         if(isStereo || isVirtualReality)
@@ -1807,8 +1819,6 @@ public:
     float scaleFactor = 1.0;
 
     bool isSimulating = true;
-    float simulationTimeStep = 1.0f/60.0f;
-    float accumulatedTimeToSimulate = 0.0f;
     int simulationIteration = 0;
 
     bool hasWheelEvent = false;
