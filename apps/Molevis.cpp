@@ -811,6 +811,9 @@ public:
             if(covalentRadius)
                 description.radius = covalentRadius.value();
 
+            description.lennardJonesEpsilon = 1.0;
+            description.lennardJonesSigma = 1.0;
+
             auto state = AtomState{};
             state.position = Vector3(atomPosition[0], atomPosition[1], atomPosition[2]);
 
