@@ -2,6 +2,7 @@
 #include "SDL_syswm.h"
 #include "AGPU/agpu.hpp"
 #include "AABox.hpp"
+#include "DAABox.hpp"
 #include "PeriodicTable.hpp"
 #include "LennardJonesTable.hpp"
 #include "AtomBondDescription.hpp"
@@ -38,6 +39,11 @@ int64_t getMicroseconds()
 
 #endif
 
+double lennardJonesDerivative(double r, double sigma, double epsilon)
+{
+    return 24*epsilon*(pow(sigma, 6)/pow(r, 7) - 2.0*pow(sigma, 12)/pow(r, 13));
+}
+
 struct UIElementQuad
 {
     Vector2 position;
@@ -63,9 +69,19 @@ struct Random
         return std::uniform_real_distribution<> (min, max)(rand);
     }
 
+    double randDouble(float min, float max)
+    {
+        return std::uniform_real_distribution<> (min, max)(rand);
+    }
+
     Vector3 randVector3(const Vector3 &min, const Vector3 &max)
     {
         return Vector3{randFloat(min.x, max.x), randFloat(min.y, max.y), randFloat(min.z, max.z)};
+    }
+
+    DVector3 randDVector3(const Vector3 &min, const Vector3 &max)
+    {
+        return DVector3{randDouble(min.x, max.x), randDouble(min.y, max.y), randDouble(min.z, max.z)};
     }
 
     Vector4 randVector4(const Vector4 &min, const Vector4 &max)
@@ -456,18 +472,18 @@ public:
         // Atom state buffers
         {
             agpu_buffer_description desc = {};
-            desc.size = (sizeof(AtomState)*std::max(initialAtomStates.size(), size_t(1024)) + 255) & (-256);
+            desc.size = (sizeof(AtomState)*std::max(renderingAtomState.size(), size_t(1024)) + 255) & (-256);
             desc.heap_type = AGPU_MEMORY_HEAP_TYPE_DEVICE_LOCAL;
             desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_STORAGE_BUFFER);
             desc.main_usage_mode = AGPU_STORAGE_BUFFER;
 	        desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
             
-            size_t uploadSize = sizeof(AtomState)*initialAtomStates.size();
+            size_t uploadSize = sizeof(AtomState)*renderingAtomState.size();
             atomStateFrontBuffer = device->createBuffer(&desc, nullptr);
-            atomStateFrontBuffer->uploadBufferData(0, uploadSize, initialAtomStates.data());
+            atomStateFrontBuffer->uploadBufferData(0, uploadSize, renderingAtomState.data());
 
             atomStateBackBuffer = device->createBuffer(&desc, nullptr);
-            atomStateBackBuffer->uploadBufferData(0, uploadSize, initialAtomStates.data());
+            atomStateBackBuffer->uploadBufferData(0, uploadSize, renderingAtomState.data());
         }
 
         atomFrontBufferBinding = shaderSignature->createShaderResourceBinding(2);
@@ -800,7 +816,8 @@ public:
         Random rand;
         const auto &positions = frame.positions();
         atomDescriptions.reserve(frame.size());
-        initialAtomStates.reserve(frame.size());
+        simulationAtomState.reserve(frame.size());
+        renderingAtomState.reserve(frame.size());
         
         for(size_t i = 0; i < positions.size(); ++i)
         {
@@ -826,11 +843,14 @@ public:
                 description.lennardJonesSigma = periodicElement.lennardJonesSigma;
             }
 
-            auto state = AtomState{};
-            state.position = Vector3(atomPosition[0], atomPosition[1], atomPosition[2]);
+            {
+                auto simulationState = AtomSimulationState{};
+                simulationState.position = DVector3(atomPosition[0], atomPosition[1], atomPosition[2]);
 
-            atomDescriptions.push_back(description);
-            initialAtomStates.push_back(state);
+                atomDescriptions.push_back(description);
+                simulationAtomState.push_back(simulationState);
+                renderingAtomState.push_back(simulationState.asRenderingState());
+            }
         }
 
         auto& topology = frame.topology();
@@ -842,8 +862,8 @@ public:
             const auto &firstAtomDesc = atomDescriptions[firstAtomIndex];
             const auto &secondAtomDesc = atomDescriptions[secondAtomIndex];
 
-            const auto &firstAtomPosition = initialAtomStates[firstAtomIndex];
-            const auto &secondAtomPosition = initialAtomStates[secondAtomIndex];
+            const auto &firstAtomPosition = renderingAtomState[firstAtomIndex];
+            const auto &secondAtomPosition = renderingAtomState[secondAtomIndex];
 
             auto atomEquilibriumDistance = (firstAtomPosition.position - secondAtomPosition.position).length();
             //auto atomEquilibriumDistance = (firstAtomDesc.radius + secondAtomDesc.radius) * 0.5;
@@ -866,31 +886,39 @@ public:
     void generateTestDataset()
     {
         atomDescriptions.reserve(3);
-        initialAtomStates.reserve(3);
+        renderingAtomState.reserve(3);
+        simulationAtomState.reserve(3);
 
-        auto description = periodicTable.makeAtomDescriptionForSymbol("H");
-        description.color = getOrCreateColorForAtomType("H");
-        atomDescriptions.push_back(description);
-        atomDescriptions.push_back(description);
+        auto hydrogenDesc = periodicTable.makeAtomDescriptionForSymbol("H");
+        hydrogenDesc.color = getOrCreateColorForAtomType("H");
+
+        auto oxygenDesc = periodicTable.makeAtomDescriptionForSymbol("O");
+        oxygenDesc.color = getOrCreateColorForAtomType("O");
         //atomDescriptions.push_back(description);
         
         {
-            auto state = AtomState{};
-            state.position = Vector3(-1.5, 0.0, 0.0);
-            initialAtomStates.push_back(state);
+            auto state = AtomSimulationState{};
+            state.position = DVector3(-1, 0.0, 0.0);
+            atomDescriptions.push_back(hydrogenDesc);
+            renderingAtomState.push_back(state.asRenderingState());
+            simulationAtomState.push_back(state);
         }
 
         {
-            auto state = AtomState{};
-            state.position = Vector3(1.5, 0.0, 0.0);
-            initialAtomStates.push_back(state);
+            auto state = AtomSimulationState{};
+            state.position = DVector3(1, 0.0, 0.0);
+            atomDescriptions.push_back(hydrogenDesc);
+            renderingAtomState.push_back(state.asRenderingState());
+            simulationAtomState.push_back(state);
         }
 
-        /*{
-            auto state = AtomState{};
-            state.position = Vector3(0, 2.0, 0.0);
-            initialAtomStates.push_back(state);
-        }*/
+        {
+            auto state = AtomSimulationState{};
+            state.position = DVector3(0, 0.0, 0.0);
+            atomDescriptions.push_back(oxygenDesc);
+            renderingAtomState.push_back(state.asRenderingState());
+            simulationAtomState.push_back(state);
+        }
 
     }
 
@@ -898,22 +926,24 @@ public:
     {
         Random rand;
         atomDescriptions.reserve(atomsToGenerate);
-        initialAtomStates.reserve(atomsToGenerate);
+        renderingAtomState.reserve(atomsToGenerate);
+        simulationAtomState.reserve(atomsToGenerate);
 
         for(size_t i = 0; i < atomsToGenerate; ++i)
         {
             auto description = AtomDescription{};
-            auto state = AtomState{};
+            auto state = AtomSimulationState{};
 
             description.lennardJonesEpsilon = 1.0;//rand.randFloat(1, 5);
             description.lennardJonesSigma = 1.0;//rand.randFloat(1, 5);
             description.radius = 1.0;//rand.randFloat(0.5, 2);
             description.color = rand.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
             description.mass = 1.0;
-            state.position = rand.randVector3(-10, 10);
+            state.position = rand.randDVector3(-10, 10);
 
             atomDescriptions.push_back(description);
-            initialAtomStates.push_back(state);
+            simulationAtomState.push_back(state);
+            renderingAtomState.push_back(state.asRenderingState());
         }
 
         for(size_t i = 0; i < bondsToGenerate; ++i)
@@ -937,18 +967,18 @@ public:
         computeAtomsBoundingBox();
     }
 
-    AABox atomsBoundingBox;
+    DAABox atomsBoundingBox;
 
     void computeAtomsBoundingBox()
     {
         // Move the atoms to their bounding box center
         {
-            atomsBoundingBox = AABox::empty();
-            for(auto &atom : initialAtomStates)
+            atomsBoundingBox = DAABox::empty();
+            for(auto &atom : simulationAtomState)
                 atomsBoundingBox.insertPoint(atom.position);
             auto center = atomsBoundingBox.center();
 
-            for(auto &atom : initialAtomStates)
+            for(auto &atom : simulationAtomState)
                 atom.position = atom.position - center;
 
             //printf("center %f %f %f\n", center.x, center.y, center.z);
@@ -958,12 +988,12 @@ public:
         
         // Recompute the bounding box
         {
-            atomsBoundingBox = AABox::empty();
-            for(auto &atom : initialAtomStates)
+            atomsBoundingBox = DAABox::empty();
+            for(auto &atom : simulationAtomState)
                 atomsBoundingBox.insertPoint(atom.position);
             auto center = atomsBoundingBox.center();
 
-            for(auto &atom : initialAtomStates)
+            for(auto &atom : simulationAtomState)
                 atom.position = atom.position - center;
 
             //printf("center %f %f %f\n", center.x, center.y, center.z);
@@ -1250,25 +1280,96 @@ public:
         currentLayoutY = currentLayoutRowY;
     }
 
+    bool shouldSimulateInCPU = true;
+
+    void simulateInCPU(double timestep)
+    {
+        assert(simulationAtomState.size() == renderingAtomState.size());
+
+        // Reset the net force.
+        for(size_t i = 0; i < simulationAtomState.size(); ++i)
+            simulationAtomState[i].netForce = DVector3(0, 0, 0);
+
+        // Lennard-jones potential
+        for(size_t i = 0; i < simulationAtomState.size(); ++i)
+        {
+            auto &firstAtomDesc = atomDescriptions[i];
+            auto &firstAtomState = simulationAtomState[i];
+
+            DVector3 firstPosition = firstAtomState.position;
+
+            double firstLennardJonesCutoff  = firstAtomDesc.lennardJonesCutoff;
+            double firstLennardJonesEpsilon = firstAtomDesc.lennardJonesEpsilon;
+            double firstLennardJonesSigma   = firstAtomDesc.lennardJonesSigma;
+
+            for(size_t j = 0; j < simulationAtomState.size(); ++j)
+            {
+                if(i == j)
+                    continue;
+
+                auto &secondAtomDesc = atomDescriptions[j];
+                auto &secondAtomState = simulationAtomState[j];
+
+                DVector3 secondPosition = secondAtomState.position;
+
+                double secondLennardJonesCutoff  = secondAtomDesc.lennardJonesCutoff;
+                double secondLennardJonesEpsilon = secondAtomDesc.lennardJonesEpsilon;
+                double secondLennardJonesSigma   = secondAtomDesc.lennardJonesSigma;
+
+                double lennardJonesCutoff = firstLennardJonesCutoff + secondLennardJonesCutoff;
+                double lennardJonesEpsilon = sqrt(firstLennardJonesEpsilon*secondLennardJonesEpsilon);
+                double lennardJonesSigma = (firstLennardJonesSigma + secondLennardJonesSigma) * 0.5;
+
+                DVector3 direction = firstPosition - secondPosition;
+                auto dist = direction.length();
+                if(1e-12 < dist && dist < lennardJonesCutoff)
+                {
+                    auto normalizedDirection = direction / dist;
+                    auto force = -normalizedDirection * lennardJonesDerivative(dist, lennardJonesSigma, lennardJonesEpsilon);
+                    firstAtomState.netForce = firstAtomState.netForce + force;
+                }
+            }
+        }
+        
+        // Integrate the atoms
+        for(size_t i = 0; i < simulationAtomState.size(); ++i)
+        {
+            auto &state = simulationAtomState[i];
+            auto acceleration = state.netForce / atomDescriptions[i].mass;
+            state.velocity = state.velocity + acceleration*timestep;
+            state.position = state.position + state.velocity*timestep;
+        }
+
+        // Upload the new state
+        for(size_t i = 0; i < simulationAtomState.size(); ++i)
+            renderingAtomState[i] = simulationAtomState[i].asRenderingState();
+
+        atomStateFrontBuffer->uploadBufferData(0, renderingAtomState.size()*sizeof(AtomState), renderingAtomState.data());
+        atomStateBackBuffer->uploadBufferData(0, renderingAtomState.size()*sizeof(AtomState), renderingAtomState.data());
+
+        ++simulationIteration;
+    }
+
     void emitSimulationStepCommands()
     {
         // Reset the simulation time step.
         commandList->usePipelineState(simulationResetTimeStepPipeline);
-        commandList->dispatchCompute((initialAtomStates.size() + 31)/32, 1, 1);
+        commandList->dispatchCompute((renderingAtomState.size() + 31)/32, 1, 1);
         commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
 
         // Accumulate the lennard jones potential energy.
         commandList->usePipelineState(simulationBodiesPipeline);
-        commandList->dispatchCompute((initialAtomStates.size() + 31)/32, 1, 1);
+        commandList->dispatchCompute((renderingAtomState.size() + 31)/32, 1, 1);
         commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
 
         // Integrate simulation time step.
         commandList->usePipelineState(simulationIntegratePipeline);
-        commandList->dispatchCompute((initialAtomStates.size() + 31)/32, 1, 1);
+        commandList->dispatchCompute((renderingAtomState.size() + 31)/32, 1, 1);
         commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
 
         // Swap the back buffer with the front buffer.
         std::swap(atomBackBufferBinding, atomFrontBufferBinding);
+        std::swap(atomStateFrontBuffer, atomStateFrontBuffer);
         commandList->useComputeShaderResources(atomFrontBufferBinding);
 
         ++simulationIteration;
@@ -1392,6 +1493,16 @@ public:
         rightEyeCameraStateUniformBuffer->uploadBufferData(0, sizeof(rightEyeCameraState), &rightEyeCameraState);
         uiDataBuffer->uploadBufferData(0, uiElementQuadBuffer.size() * sizeof(UIElementQuad), uiElementQuadBuffer.data());
 
+        if(isSimulating && shouldSimulateInCPU)
+        {
+            accumulatedTimeToSimulate += delta;
+            if(accumulatedTimeToSimulate >= simulationTimeStep)
+            {
+                simulateInCPU(simulationTimeStep);
+                accumulatedTimeToSimulate -= simulationTimeStep;
+            }
+        }
+
         // Build the command list
         commandAllocator->reset();
         commandList->reset(commandAllocator, nullptr);
@@ -1403,14 +1514,14 @@ public:
         commandList->useComputeShaderResources(atomBoundQuadBufferBinding);
         commandList->pushConstants(0, sizeof(pushConstants), &pushConstants);
 
-        // Are we simulating?
-        if(isSimulating)
+        // Are we simulating in GPU?
+        if(isSimulating && !shouldSimulateInCPU)
         {
             accumulatedTimeToSimulate += delta;
             if(accumulatedTimeToSimulate >= simulationTimeStep)
             {
                 emitSimulationStepCommands();
-                accumulatedTimeToSimulate = 0;
+                accumulatedTimeToSimulate -= simulationTimeStep;
             }
         }
 
@@ -1630,7 +1741,8 @@ public:
 
     std::vector<AtomDescription> atomDescriptions; 
     std::vector<AtomBondDescription> atomBondDescriptions; 
-    std::vector<AtomState> initialAtomStates;
+    std::vector<AtomState> renderingAtomState;
+    std::vector<AtomSimulationState> simulationAtomState;
     agpu_buffer_ref atomDescriptionBuffer;
     agpu_buffer_ref atomBondDescriptionBuffer;
     agpu_buffer_ref atomStateFrontBuffer;
