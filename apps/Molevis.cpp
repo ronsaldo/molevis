@@ -54,16 +54,28 @@ double lennardJonesDerivative(double r, double sigma, double epsilon)
     return 24*epsilon*(pow(sigma, 6)/pow(r, 7) - 2.0*pow(sigma, 12)/pow(r, 13));
 }
 
-double morsePotential(float r, float De, float a, float re)
+double morsePotential(double r, double De, double a, double re)
 {
     double interior = (1 - exp(-a*(r - re)));
     return De*interior*interior;
 }
 
-float morsePotentialDerivative(float r, float De, float a, float re)
+double morsePotentialDerivative(double r, double De, double a, double re)
 {
-    float innerExp = exp(-a*(r - re));
+    double innerExp = exp(-a*(r - re));
     return -2.0*a*De*(1.0 - innerExp)*innerExp;
+}
+
+double hookPotential(double distance, double equilibriumDistance, double k)
+{
+    double delta = distance - equilibriumDistance;
+    return 0.5*k * (delta*delta);
+}
+
+double hookPotentialDerivative(double distance, double equilibriumDistance, double k)
+{
+    double delta = distance - equilibriumDistance;
+    return k * delta;
 }
 
 struct UIElementQuad
@@ -887,14 +899,14 @@ public:
             const auto &firstAtomPosition = renderingAtomState[firstAtomIndex];
             const auto &secondAtomPosition = renderingAtomState[secondAtomIndex];
 
-            //auto atomEquilibriumDistance = (firstAtomPosition.position - secondAtomPosition.position).length();
-            auto atomEquilibriumDistance = firstAtomDesc.radius + secondAtomDesc.radius;
+            auto atomEquilibriumDistance = (firstAtomPosition.position - secondAtomPosition.position).length();
+            //auto atomEquilibriumDistance = firstAtomDesc.radius + secondAtomDesc.radius;
 
             auto description = AtomBondDescription{};
             description.firstAtomIndex = firstAtomIndex;
             description.secondAtomIndex = secondAtomIndex;
             
-            description.morseEquilibriumDistance = atomEquilibriumDistance;
+            description.equilibriumDistance = atomEquilibriumDistance;
             description.morseWellDepth = 1;
             description.morseWellWidth = 1;
             description.thickness = 0.1;
@@ -920,7 +932,7 @@ public:
         
         {
             auto state = AtomSimulationState{};
-            state.position = DVector3(-1, 0.0, 0.0);
+            state.position = DVector3(-5, 0.0, 0.0);
             atomDescriptions.push_back(hydrogenDesc);
             renderingAtomState.push_back(state.asRenderingState());
             simulationAtomState.push_back(state);
@@ -928,7 +940,7 @@ public:
 
         {
             auto state = AtomSimulationState{};
-            state.position = DVector3(1, 0.0, 0.0);
+            state.position = DVector3(5, 0.0, 0.0);
             atomDescriptions.push_back(hydrogenDesc);
             renderingAtomState.push_back(state.asRenderingState());
             simulationAtomState.push_back(state);
@@ -942,6 +954,29 @@ public:
             simulationAtomState.push_back(state);
         }
 
+        {
+            AtomBondDescription bond = {};
+            bond.color = Vector4(0.8, 0.8, 0.8, 1.0);
+            bond.firstAtomIndex = 0;
+            bond.secondAtomIndex = 2;
+            bond.thickness = 0.1;
+            bond.equilibriumDistance = hydrogenDesc.radius + oxygenDesc.radius;
+            bond.morseWellDepth = 1;
+            bond.morseWellWidth = 1;
+            atomBondDescriptions.push_back(bond);
+        }
+
+        {
+            AtomBondDescription bond = {};
+            bond.color = Vector4(0.8, 0.8, 0.8, 1.0);
+            bond.firstAtomIndex = 1;
+            bond.secondAtomIndex = 2;
+            bond.thickness = 0.1;
+            bond.equilibriumDistance = hydrogenDesc.radius + oxygenDesc.radius;
+            bond.morseWellDepth = 1;
+            bond.morseWellWidth = 1;
+            atomBondDescriptions.push_back(bond);
+        }
     }
 
     void generateRandomDataset(size_t atomsToGenerate, size_t bondsToGenerate)
@@ -978,7 +1013,7 @@ public:
             auto description = AtomBondDescription{};
             description.firstAtomIndex = firstAtomIndex;
             description.secondAtomIndex = secondAtomIndex;
-            description.morseEquilibriumDistance = rand.randFloat(5, 20);
+            description.equilibriumDistance = rand.randFloat(5, 20);
             description.morseWellDepth = 1;
             description.morseWellWidth = 1;
             description.thickness = rand.randFloat(0.1, 0.4);
@@ -1022,6 +1057,10 @@ public:
             //printf("min %f %f %f\n", atomsBoundingBox.min.x, atomsBoundingBox.min.y, atomsBoundingBox.min.z);
             //printf("max %f %f %f\n", atomsBoundingBox.max.x, atomsBoundingBox.max.y, atomsBoundingBox.max.z);    
         }
+
+
+        for(size_t i = 0;i < simulationAtomState.size(); ++i)
+            renderingAtomState[i] = simulationAtomState[i].asRenderingState();
 
     }
 
@@ -1365,11 +1404,25 @@ public:
             auto direction = firstAtomState.position - secondAtomState.position;
             auto distance = direction.length();
             auto normalizedDirection = direction / distance;
-            auto force = -normalizedDirection*morsePotentialDerivative(distan   ce, bond.morseWellDepth, bond.morseWellWidth, bond.morseEquilibriumDistance);
+            auto force = -normalizedDirection*morsePotentialDerivative(distance, bond.morseWellDepth, bond.morseWellWidth, bond.equilibriumDistance);
             firstAtomState.netForce = firstAtomState.netForce + force;
             secondAtomState.netForce = secondAtomState.netForce - force;
         }*/
-        
+
+        // Hooke law bond
+        for(auto &bond : atomBondDescriptions)
+        {
+            auto &firstAtomState = simulationAtomState[bond.firstAtomIndex];
+            auto &secondAtomState = simulationAtomState[bond.secondAtomIndex];
+
+            auto direction = firstAtomState.position - secondAtomState.position;
+            auto distance = direction.length();
+            auto normalizedDirection = direction / distance;
+            auto force = -normalizedDirection*hookPotentialDerivative(distance, bond.equilibriumDistance, 100.0);
+            firstAtomState.netForce = firstAtomState.netForce + force;
+            secondAtomState.netForce = secondAtomState.netForce - force;
+        }
+
         // Integrate the velocites and compute total kinetic energy.
         double totalKineticEnergy = 0.0;
         for(size_t i = 0; i < simulationAtomState.size(); ++i)
@@ -1385,6 +1438,19 @@ public:
         // Compute the average kinetic energy.
         double averageKineticEnergy = totalKineticEnergy / double(simulationAtomState.size());
         //printf("total kinetic %f average %f\n", totalKineticEnergy, averageKineticEnergy);;
+
+        double targetKineticEnergy = 1.0;
+        double kineticEnergyLambda = targetKineticEnergy / std::max(0.01, averageKineticEnergy);
+        //double kineticEnergyLambda = 1.0;
+        //printf("lambda %f\n", kineticEnergyLambda);
+        
+        for(size_t i = 0; i < simulationAtomState.size(); ++i)
+        {
+            auto &state = simulationAtomState[i];
+            state.velocity = state.velocity * kineticEnergyLambda;
+        }
+            
+
 
         // Integrate the positions
         for(size_t i = 0; i < simulationAtomState.size(); ++i)

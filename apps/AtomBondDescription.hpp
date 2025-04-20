@@ -8,7 +8,7 @@ struct AtomBondDescription
 {
     uint32_t firstAtomIndex;
     uint32_t secondAtomIndex;
-    float morseEquilibriumDistance;
+    float equilibriumDistance;
     float morseWellDepth;
     float morseWellWidth;
     float thickness;
