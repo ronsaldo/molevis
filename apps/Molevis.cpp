@@ -810,7 +810,7 @@ public:
             auto chemAtomNumber = chemAtom.atomic_number();
 
             auto description = AtomDescription{};
-            description.atomNumber = chemAtomNumber ? chemAtomNumber.value() : 0.0;
+            description.atomNumber = chemAtomNumber ? chemAtomNumber.value() : 1;
             description.mass = chemAtom.mass();
             
             description.color = getOrCreateColorForAtomType(chemAtom.type());
@@ -819,8 +819,12 @@ public:
             if(covalentRadius)
                 description.radius = covalentRadius.value();
 
-            description.lennardJonesEpsilon = 1.0;
-            description.lennardJonesSigma = 1.0;
+            auto &periodicElement = periodicTable.elements[description.atomNumber];
+            {
+                description.lennardJonesCutoff = periodicElement.lennardJonesCutoff;
+                description.lennardJonesEpsilon = periodicElement.lennardJonesEpsilon;
+                description.lennardJonesSigma = periodicElement.lennardJonesSigma;
+            }
 
             auto state = AtomState{};
             state.position = Vector3(atomPosition[0], atomPosition[1], atomPosition[2]);
@@ -866,8 +870,6 @@ public:
 
         auto description = periodicTable.makeAtomDescriptionForSymbol("H");
         description.color = getOrCreateColorForAtomType("H");
-        //description.lennardJonesEpsilon = 1;
-        //description.lennardJonesSigma = 1;
         atomDescriptions.push_back(description);
         atomDescriptions.push_back(description);
         //atomDescriptions.push_back(description);
