@@ -61,6 +61,7 @@ endif()
 
 file(GLOB ASSET_FILES RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
     "assets/shaders/*.glsl"
+    "assets/datasets/*.csv"
     "assets/textures/*.bmp"
 )
 

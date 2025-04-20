@@ -5,6 +5,7 @@
 
 struct AtomDescription
 {
+    int atomNumber;
     float radius;
     float mass;
     float lennardJonesEpsilon;

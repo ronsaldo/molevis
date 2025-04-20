@@ -2,6 +2,7 @@
 #include "SDL_syswm.h"
 #include "AGPU/agpu.hpp"
 #include "AABox.hpp"
+#include "PeriodicTable.hpp"
 #include "AtomBondDescription.hpp"
 #include "AtomDescription.hpp"
 #include "AtomState.hpp"
@@ -96,6 +97,7 @@ public:
         agpu_uint gpuIndex = 0;
         int randomAtomCount = 1000;
         int randomBondCount = 0;
+        loadPeriodicTable();
         initializeAtomColorConventions();
         std::string inputFileName;
 
@@ -163,8 +165,8 @@ public:
         }
         else
         {
-            //generateTestDataset();
-            generateRandomDataset(randomAtomCount, randomBondCount);
+            generateTestDataset();
+            //generateRandomDataset(randomAtomCount, randomBondCount);
         }
 
         // Get the platform.
@@ -755,13 +757,23 @@ public:
 
     Random randColor;
     std::unordered_map<std::string, Vector4> atomTypeColorMap;
+    PeriodicTable periodicTable;
 
     void initializeAtomColorConventions()
     {
         atomTypeColorMap["H"] = Vector4(0.9, 0.9, 0.9, 1.0);
         atomTypeColorMap["C"] = Vector4(0.01, 0.01, 0.01, 1.0);
-        atomTypeColorMap["N"] = Vector4(0.5, 0.3, 0.8, 1.0);
+        atomTypeColorMap["N"] = Vector4(0.3, 0.3, 0.8, 1.0);
         atomTypeColorMap["O"] = Vector4(1.0, 0.0, 0.0, 1.0);
+    }
+
+    void loadPeriodicTable()
+    {
+        if(!periodicTable.loadFromFile("assets/datsets/periodic-table-of-elements.csv"))
+        {
+            fprintf(stderr, "Failed to load periodic table dataset.\n");
+            abort();
+        }
     }
 
     Vector4 getOrCreateColorForAtomType(const std::string &type)
@@ -787,7 +799,10 @@ public:
             const auto &atomPosition = positions[i];
             const auto &chemAtom = frame[i];
 
+            auto chemAtomNumber = chemAtom.atomic_number();
+
             auto description = AtomDescription{};
+            description.atomNumber = chemAtomNumber ? chemAtomNumber.value() : 0.0;
             description.mass = chemAtom.mass();
             
             description.color = getOrCreateColorForAtomType(chemAtom.type());
@@ -835,8 +850,8 @@ public:
 
     void generateTestDataset()
     {
-        atomDescriptions.reserve(2);
-        initialAtomStates.reserve(2);
+        atomDescriptions.reserve(3);
+        initialAtomStates.reserve(3);
 
         auto description = AtomDescription{};
         description.radius= 1.0;
@@ -844,6 +859,7 @@ public:
         description.lennardJonesEpsilon = 1;
         description.lennardJonesSigma = 1;
         description.color = Vector4(1.0, 0, 0, 1);
+        atomDescriptions.push_back(description);
         atomDescriptions.push_back(description);
         atomDescriptions.push_back(description);
         
@@ -856,6 +872,12 @@ public:
         {
             auto state = AtomState{};
             state.position = Vector3(1, 0.0, 0.0);
+            initialAtomStates.push_back(state);
+        }
+
+        {
+            auto state = AtomState{};
+            state.position = Vector3(0, 2.0, 0.0);
             initialAtomStates.push_back(state);
         }
 
