@@ -26,10 +26,14 @@ vec3 sdfCapsuleGradient(vec3 p, vec3 a, vec3 b, float r)
 void main()
 {
     AtomBondDesc desc = AtomBondDescriptionBuffer[inBondIndex];
-    vec3 firstAtomWorldPosition = (CameraState.modelMatrix *vec4(AtomStateBuffer[desc.firstAtomIndex].position, 1.0)).xyz;
+    vec3 firstAtomWorldPosition = (CameraState.modelMatrix * vec4(AtomStateBuffer[desc.firstAtomIndex].position, 1.0)).xyz;
+    vec3 firstAtomWorldRadius = (CameraState.modelMatrix * (
+        vec4(AtomStateBuffer[desc.firstAtomIndex].position, 1.0)
+        + vec4(desc.thickness, 0.0, 0.0, 1.0))).xyz;
+
     vec3 secondAtomWorldPosition = (CameraState.modelMatrix *vec4(AtomStateBuffer[desc.secondAtomIndex].position, 1.0)).xyz;
 
-    float radius = desc.thickness;
+    float radius = length(firstAtomWorldRadius - firstAtomWorldPosition);
     vec3 firstAtomViewPosition = (CameraState.viewMatrix * vec4(firstAtomWorldPosition, 1.0)).xyz;
     vec3 secondAtomViewPosition = (CameraState.viewMatrix * vec4(secondAtomWorldPosition, 1.0)).xyz;
     
