@@ -1,5 +1,5 @@
 # AbstractGPU cmake build script.
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.5)
 project(Mollevis)
 
 # Turn warnings
@@ -20,15 +20,20 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${MainOutputDirectory} )
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${MainOutputDirectory} )
 
 # For VisualStudio in Window
-find_path(SDL2_INCLUDE_DIRS
-  NAMES SDL.h
-  PATH_SUFFIXES SDL2
-)
+if(WIN32)
+    set(SDL2_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/SDL2/include")
+    set(SDL2_LIBRARY_PATH "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/SDL2/lib/x64")
+else()
+    find_path(SDL2_INCLUDE_DIRS
+    NAMES SDL.h
+    PATH_SUFFIXES SDL2
+    )
 
-find_path(SDL2_LIBRARY_PATH
-  NAMES SDL2.lib SDL2.a SDL2-2.0.lib SDL2-2.0.a libSDL2-2.0.a
-)
-
+    find_path(SDL2_LIBRARY_PATH
+    NAMES SDL2.lib SDL2.a SDL2-2.0.lib SDL2-2.0.a libSDL2-2.0.a
+    )
+endif()
+    
 find_library(SDL2_LIBRARY NAMES SDL2-2.0 SDL2 PATHS ${SDL2_LIBRARY_PATH})
 find_library(SDL2_MAIN_LIBRARY NAMES SDL2main PATHS ${SDL2_LIBRARY_PATH})
 
@@ -59,21 +64,24 @@ if(CMAKE_CONFIGURATION_TYPES)
     set(DATA_OUTPUT_PREFIX "${MainOutputDirectory}/$<CONFIG>")
 endif()
 
-file(GLOB ASSET_FILES RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
-    "assets/shaders/*.glsl"
-    "assets/datasets/*.csv"
-    "assets/textures/*.bmp"
-)
-
-add_custom_target(SampleData ALL)
-foreach(asset_file ${ASSET_FILES})
-    add_custom_command(
-        TARGET SampleData
-        POST_BUILD
-        COMMAND cmake -E copy
-            "${CMAKE_CURRENT_SOURCE_DIR}/${asset_file}"
-            "${DATA_OUTPUT_PREFIX}/${asset_file}"
-        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${asset_file}"
-        COMMENT "Copy ${asset_file}"
+if(NOT WIN32)
+    file(GLOB ASSET_FILES RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+        "assets/shaders/*.glsl"
+        "assets/datasets/*.csv"
+        "assets/textures/*.bmp"
     )
-endforeach()
+
+    add_custom_target(SampleData ALL)
+    foreach(asset_file ${ASSET_FILES})
+        add_custom_command(
+            TARGET SampleData
+            POST_BUILD
+            COMMAND cmake -E copy
+                "${CMAKE_CURRENT_SOURCE_DIR}/${asset_file}"
+                "${DATA_OUTPUT_PREFIX}/${asset_file}"
+            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${asset_file}"
+            COMMENT "Copy ${asset_file}"
+        )
+    endforeach()
+
+endif()

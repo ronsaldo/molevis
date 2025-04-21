@@ -1665,13 +1665,13 @@ public:
         {
             // Side by side compose
             commandList->usePipelineState(sideBySidePipeline);
-            commandList->drawArrays(4, 1, 0, 0);
+            commandList->drawArrays(3, 1, 0, 0);
         }
         else
         {
             // Pass the left eye output
             commandList->usePipelineState(passthroughPipeline);
-            commandList->drawArrays(4, 1, 0, 0);
+            commandList->drawArrays(3, 1, 0, 0);
         }
         
         // UI element pipeline
