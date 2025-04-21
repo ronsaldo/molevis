@@ -27,13 +27,15 @@ bool raySphereTest(float sphereRadius, in vec3 sphereCenter, in vec3 rayDirectio
 void main()
 {
     AtomDescription desc = AtomDescriptionBuffer[inAtomIndex];
-    vec3 worldCenter = AtomStateBuffer[inAtomIndex].position * CameraState.molecularScale;
+    vec3 worldCenter = (CameraState.modelMatrix*vec4(AtomStateBuffer[inAtomIndex].position, 1.0)).xyz;
+    vec3 worldRadiusVertex = (CameraState.modelMatrix*vec4(AtomStateBuffer[inAtomIndex].position + vec3(desc.radius, 0.0, 0.0), 1.0)).xyz;
+    float radius = length(worldRadiusVertex - worldCenter);
     vec3 viewCenter = (CameraState.viewMatrix*vec4(worldCenter, 1.0)).xyz;
 
     vec3 D = normalize(inViewPosition);
     vec2 lambdas;
     //raySphereTest(desc.radius, viewCenter, D, lambdas);
-    bool inside = raySphereTest(desc.radius * CameraState.molecularScale, viewCenter, D, lambdas);
+    bool inside = raySphereTest(radius, viewCenter, D, lambdas);
     if (!inside)
         discard;
 

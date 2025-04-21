@@ -13,12 +13,12 @@ const vec2 quadVertices[4] = vec2[4](
 void main()
 {
     AtomBondDesc desc = AtomBondDescriptionBuffer[gl_InstanceIndex];
-    vec3 firstAtomWorldPosition = AtomStateBuffer[desc.firstAtomIndex].position*CameraState.molecularScale;
-    vec3 secondAtomWorldPosition = AtomStateBuffer[desc.secondAtomIndex].position*CameraState.molecularScale;
+    vec3 firstAtomWorldPosition = (CameraState.modelMatrix * vec4(AtomStateBuffer[desc.firstAtomIndex].position, 1.0)).xyz;
+    vec3 secondAtomWorldPosition = (CameraState.modelMatrix * vec4(AtomStateBuffer[desc.secondAtomIndex].position, 1.0)).xyz;
 
-    float radius = desc.thickness*CameraState.molecularScale;
-    vec3 firstAtomViewPosition = (CameraState.viewMatrix * vec4(firstAtomWorldPosition, 1.0)).xyz;
-    vec3 secondAtomViewPosition = (CameraState.viewMatrix * vec4(secondAtomWorldPosition, 1.0)).xyz;
+    float radius = desc.thickness;
+    vec3 firstAtomViewPosition = (CameraState.viewMatrix * (CameraState.modelMatrix * vec4(firstAtomWorldPosition, 1.0))).xyz;
+    vec3 secondAtomViewPosition = (CameraState.viewMatrix * (CameraState.modelMatrix * vec4(secondAtomWorldPosition, 1.0))).xyz;
 
     vec2 lineTangent = normalize(secondAtomViewPosition.xy - firstAtomViewPosition.xy);
     vec2 lineBitangent = vec2(-lineTangent.y, lineTangent.x);

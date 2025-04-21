@@ -28,6 +28,16 @@ struct Matrix4x4
         }};
     }
 
+    static Matrix4x4 identity()
+    {
+        return Matrix4x4{{
+            {1, 0, 0, 0},
+            {0, 1, 0, 0},
+            {0, 0, 1, 0},
+            {0, 0, 0, 1},
+        }};
+    }
+
     static Matrix4x4 perspective(float fovy, float aspect, float nearDistanceDistance, float farDistanceDistance, bool flipVertically)
     {
         float fovyRad = fovy *0.5f * (M_PI / 180.0f);

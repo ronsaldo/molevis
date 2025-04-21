@@ -187,7 +187,7 @@ public:
                 }
                 else if (arg == "-scale-factor")
                 {
-                    scaleFactor = atof(argv[++i]);
+                    modelScaleFactor = atof(argv[++i]);
                 }                
                 else if (arg == "-stereo")
                 {
@@ -1053,14 +1053,22 @@ public:
             for(auto &atom : simulationAtomState)
                 atomsBoundingBox.insertPoint(atom.position);
             auto center = atomsBoundingBox.center();
-            auto centerFloor = DVector3(center.x, center.y - atomsBoundingBox.halfExtent().y, center.z);
-
             for(auto &atom : simulationAtomState)
-                atom.position = atom.position - centerFloor;
+                atom.position = atom.position - center;
 
             //printf("center %f %f %f\n", center.x, center.y, center.z);
             //printf("min %f %f %f\n", atomsBoundingBox.min.x, atomsBoundingBox.min.y, atomsBoundingBox.min.z);
             //printf("max %f %f %f\n", atomsBoundingBox.max.x, atomsBoundingBox.max.y, atomsBoundingBox.max.z);    
+        }
+
+        // Recompute the bounding
+        {
+            atomsBoundingBox = DAABox::empty();
+            for(auto &atom : simulationAtomState)
+                atomsBoundingBox.insertPoint(atom.position);
+
+            //modelPosition = Vector3(0.0, atomsBoundingBox.halfExtent().y*modelScaleFactor, 0.0);
+            modelPosition = Vector3(0, 0, 0);
         }
 
 
@@ -1245,6 +1253,12 @@ public:
         {
         case SDLK_ESCAPE:
             isQuitting = true;
+            break;
+        case SDLK_KP_PLUS:
+            modelScaleFactor *= 1.1;
+            break;
+        case SDLK_KP_MINUS:
+            modelScaleFactor /= 1.1;
             break;
         case ' ':
             isSimulating = !isSimulating;
@@ -1520,16 +1534,7 @@ public:
         // Mouse wheel.
         if(hasWheelEvent && !hasHandledWheelEvent)
         {
-
-            if(wheelDelta >= 1)
-            {
-                scaleFactor *= 1.1;
-            }
-            else
-            {
-                scaleFactor /= 1.1;
-            }
-            //cameraTranslation += cameraMatrix * Vector3(0, 0, -wheelDelta);
+            cameraTranslation += cameraMatrix * Vector3(0, 0, -wheelDelta);
         }
 
         char buffer[64];
@@ -1539,11 +1544,13 @@ public:
         auto cameraInverseMatrix = cameraMatrix.transposed();
         auto cameraInverseTranslation = cameraInverseMatrix * -cameraTranslation;
 
-        cameraState.molleculeScaleFactor = scaleFactor;
         cameraState.viewMatrix = Matrix4x4::withMatrix3x3AndTranslation(cameraInverseMatrix, cameraInverseTranslation);
         cameraState.inverseViewMatrix = cameraState.viewMatrix.inverse();
         cameraState.projectionMatrix = Matrix4x4::perspective(60.0, float(cameraState.screenWidth)/float(cameraState.screenHeight), cameraState.nearDistance, cameraState.farDistance, device->hasTopLeftNdcOrigin());
         cameraState.inverseProjectionMatrix = cameraState.projectionMatrix.inverse();
+
+        cameraState.modelMatrix = Matrix4x4::withMatrix3x3AndTranslation(Matrix3x3::withScale(modelScaleFactor), modelPosition);
+        cameraState.inverseModelMatrix = cameraState.modelMatrix.inverse();
 
         PushConstants pushConstants = {};
         pushConstants.atomCount = atomDescriptions.size();
@@ -1893,7 +1900,8 @@ public:
     bool isStereo = false;
     bool isVirtualReality = false;
 
-    float scaleFactor = 1.0;
+    Vector3 modelPosition = Vector3(0, 0, 0);
+    float modelScaleFactor = 0.1;
 
     bool isSimulating = true;
     int simulationIteration = 0;

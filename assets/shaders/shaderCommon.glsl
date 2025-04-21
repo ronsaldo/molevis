@@ -7,12 +7,15 @@ layout(std140, set = 1, binding = 0) uniform CameraStateBlock
     bool flipVertically;
     float nearDistance;
     float farDistance;
-    float molecularScale;
+    float padding;
 
     mat4 projectionMatrix;
     mat4 inverseProjectionMatrix;
     mat4 viewMatrix;
     mat4 inverseViewMatrix;
+
+    mat4 modelMatrix;
+    mat4 inversemodelMatrix;
 } CameraState;
 
 struct AtomDescription

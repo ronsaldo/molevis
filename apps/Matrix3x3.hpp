@@ -15,6 +15,15 @@ struct Matrix3x3
         };
     }
 
+    static Matrix3x3 withScale(float scale)
+    {
+        return Matrix3x3{
+            Vector3{scale, 0, 0},
+            Vector3{0, scale, 0},
+            Vector3{0, 0, scale},
+        };
+    }
+
     static Matrix3x3 XRotation(float angle)
     {
         float c = cos(angle);

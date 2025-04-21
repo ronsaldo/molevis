@@ -63,10 +63,11 @@ void main()
     AtomState state = AtomStateBuffer[atomIndex];
 
     // Get the atom world position
-    vec3 worldCenter = state.position*CameraState.molecularScale;
+    vec3 worldCenter = (CameraState.modelMatrix*vec4(state.position, 1.0)).xyz;
+    vec3 worldRadiusVertex = (CameraState.modelMatrix*vec4(state.position + vec3(desc.radius, 0.0, 0.0), 1.0)).xyz;
 
     // Compute the atom view position center.
-    float radius = desc.radius*CameraState.molecularScale;
+    float radius = length(worldRadiusVertex - worldCenter);
     vec3 viewCenter = (CameraState.viewMatrix * vec4(worldCenter, 1.0)).xyz;
 
     // Only accept spheres that are completely in front of the near plane.

@@ -12,13 +12,15 @@ struct CameraState
     uint32_t flipVertically = false;
     float nearDistance = 0.1f;
     float farDistance = 1000.0f;
-
-    float molleculeScaleFactor = 1.0f;
+    float padding;
 
     Matrix4x4 projectionMatrix;
     Matrix4x4 inverseProjectionMatrix;
     Matrix4x4 viewMatrix;
     Matrix4x4 inverseViewMatrix;
+    
+    Matrix4x4 modelMatrix;
+    Matrix4x4 inverseModelMatrix;
 };
 
 #endif //MOLLEVIS_CAMERA_STATE_HPP
