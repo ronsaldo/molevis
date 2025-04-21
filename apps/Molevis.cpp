@@ -615,6 +615,10 @@ public:
             builder->attachShader(gridFragmentShader);
             builder->setPrimitiveType(AGPU_TRIANGLE_STRIP);
             builder->setDepthState(true, false, AGPU_GREATER_EQUAL);
+            builder->setCullMode(AGPU_CULL_MODE_NONE);
+            builder->setBlendState(-1, true);
+            builder->setBlendFunction(-1, AGPU_BLENDING_ONE, AGPU_BLENDING_INVERTED_SRC_ALPHA, AGPU_BLENDING_OPERATION_ADD,
+                AGPU_BLENDING_ONE, AGPU_BLENDING_INVERTED_SRC_ALPHA, AGPU_BLENDING_OPERATION_ADD);
             floorGridDrawPipeline = finishBuildingPipeline(builder);
         }
 
