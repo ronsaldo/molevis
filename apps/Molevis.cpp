@@ -196,6 +196,7 @@ public:
                 else if (arg == "-vr")
                 {
                     isVirtualReality = true;
+                    vsyncDisabled = true;
                 }
                 
             }
@@ -832,9 +833,9 @@ public:
     void initializeAtomColorConventions()
     {
         atomTypeColorMap["H"] = Vector4(0.4, 0.4, 0.4, 1.0);
-        atomTypeColorMap["C"] = Vector4(0.01, 0.01, 0.01, 1.0);
-        atomTypeColorMap["N"] = Vector4(0.3, 0.3, 0.8, 1.0);
-        atomTypeColorMap["O"] = Vector4(1.0, 0.0, 0.0, 1.0);
+        atomTypeColorMap["C"] = Vector4(0.1, 0.1, 0.1, 1.0);
+        atomTypeColorMap["N"] = Vector4(0.1, 0.1, 0.8, 1.0);
+        atomTypeColorMap["O"] = Vector4(0.8, 0.1, 0.1, 1.0);
     }
 
     void loadPeriodicTable()
@@ -1580,8 +1581,8 @@ public:
                     continue;
 
                 auto headMatrix = Matrix4x4::fromAgpu(trackedPose.device_to_absolute_tracking);
-                hmdCameraState.viewMatrix = headMatrix;
-                hmdCameraState.inverseViewMatrix = headMatrix.inverse();
+                hmdCameraState.viewMatrix = headMatrix.inverse()*cameraState.viewMatrix;
+                hmdCameraState.inverseViewMatrix = hmdCameraState.viewMatrix.inverse();
             }
 
             leftEyeCameraState = hmdCameraState;
@@ -1598,7 +1599,7 @@ public:
                 vrSystem->getEyeToHeadTransform(AGPU_VR_EYE_LEFT, &eyeToHead);
 
                 auto eyeToHeadMatrix = Matrix4x4::fromAgpu(eyeToHead);
-                leftEyeCameraState.viewMatrix = leftEyeCameraState.viewMatrix * eyeToHeadMatrix;
+                leftEyeCameraState.viewMatrix = eyeToHeadMatrix.inverse() * leftEyeCameraState.viewMatrix;
                 leftEyeCameraState.inverseViewMatrix = leftEyeCameraState.viewMatrix.inverse();
             }
 
@@ -1613,9 +1614,8 @@ public:
                 vrSystem->getEyeToHeadTransform(AGPU_VR_EYE_RIGHT, &eyeToHead);
 
                 auto eyeToHeadMatrix = Matrix4x4::fromAgpu(eyeToHead);
-                rightEyeCameraState.viewMatrix = rightEyeCameraState.viewMatrix * eyeToHeadMatrix;
+                rightEyeCameraState.viewMatrix = eyeToHeadMatrix.inverse() * rightEyeCameraState.viewMatrix;
                 rightEyeCameraState.inverseViewMatrix = rightEyeCameraState.viewMatrix.inverse();
-
             }
         }
 

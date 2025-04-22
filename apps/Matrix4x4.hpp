@@ -116,7 +116,7 @@ struct Matrix4x4
                 s.columns[3].dot(o.columns[2]),
                 s.columns[3].dot(o.columns[3]),
             },
-        }};
+        }}.transposed();
     }
 
     Matrix3x3 minorMatrixAt(int row, int column) const
