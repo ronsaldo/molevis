@@ -1673,9 +1673,8 @@ public:
                     if(trackedPose.device_role == AGPU_VR_TRACKED_DEVICE_ROLE_LEFT_HAND)
                     {
                         auto & controller = handControllers[0];
-                        controller.modelState.modelMatrix = modelMatrix;
+                        controller.modelState.modelMatrix = cameraState.inverseViewMatrix*modelMatrix;
                         controller.modelState.inverseModelMatrix = modelMatrix.inverse();
-                        printf("Controller matrix ");
 
                         if(!controller.modelStateBinding)
                         {
@@ -1703,7 +1702,7 @@ public:
                     else if(trackedPose.device_role == AGPU_VR_TRACKED_DEVICE_ROLE_RIGHT_HAND)
                     {
                         auto & controller = handControllers[1];
-                        controller.modelState.modelMatrix = modelMatrix;
+                        controller.modelState.modelMatrix = cameraState.inverseViewMatrix*modelMatrix;
                         controller.modelState.inverseModelMatrix = modelMatrix.inverse();
 
                         if(!controller.modelStateBinding)
