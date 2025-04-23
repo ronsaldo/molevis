@@ -1604,6 +1604,26 @@ public:
         return model;
     }
 
+    agpu_texture_ref loadVRModelTexture(agpu_vr_render_model_texture *vrTexture)
+    {
+        agpu_texture_description desc = {};
+        desc.type = AGPU_TEXTURE_2D;
+        desc.width = vrTexture->width;
+        desc.height = vrTexture->height;
+        desc.depth = 1;
+        desc.layers = 1;
+        desc.miplevels = 1;
+        desc.format = AGPU_TEXTURE_FORMAT_B8G8R8A8_UNORM_SRGB;
+        desc.usage_modes = agpu_texture_usage_mode_mask(AGPU_TEXTURE_USAGE_SAMPLED | AGPU_TEXTURE_USAGE_COPY_DESTINATION);
+        desc.main_usage_mode = AGPU_TEXTURE_USAGE_SAMPLED;
+        desc.heap_type = AGPU_MEMORY_HEAP_TYPE_DEVICE_LOCAL;
+        desc.sample_count = 1;
+        desc.sample_quality = 0;
+        
+        auto texture = device->createTexture(&desc);
+        texture->uploadTextureData(0, 0, vrTexture->pitch, vrTexture->pitch*vrTexture->height, vrTexture->data);
+        return texture;
+    }
     void updateAndRender(float delta)
     {
         uiElementQuadBuffer.clear();
@@ -1696,7 +1716,11 @@ public:
                         {
                             auto model = vrSystem->getTrackedDeviceRenderModel(i);
                             if(model && model->texture)
+                            {
                                 controller.deviceModel = loadDeviceModel(model);
+                                auto texture = loadVRModelTexture(model->texture);
+                                controller.modelStateBinding->bindSampledTextureView(1, texture->getOrCreateFullView());
+                            }
                         }
                     }
                     else if(trackedPose.device_role == AGPU_VR_TRACKED_DEVICE_ROLE_RIGHT_HAND)
@@ -1725,7 +1749,11 @@ public:
                         {
                             auto model = vrSystem->getTrackedDeviceRenderModel(i);
                             if(model && model->texture)
+                            {
                                 controller.deviceModel = loadDeviceModel(model);
+                                auto texture = loadVRModelTexture(model->texture);
+                                controller.modelStateBinding->bindSampledTextureView(1, texture->getOrCreateFullView());
+                            }
                         }
                     }
                 }
