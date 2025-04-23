@@ -390,10 +390,10 @@ public:
 
             auto builder = device->createShaderSignatureBuilder();
             // Sampler
-            builder->beginBindingBank(1);
+            builder->beginBindingBank(1); // Set 0
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_SAMPLER, 1);
 
-            builder->beginBindingBank(2);
+            builder->beginBindingBank(2); // Set 1
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_UNIFORM_BUFFER, 1); // Screen and UI state
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // UI Data
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_SAMPLED_IMAGE, 1); // Bitmap font
@@ -401,14 +401,17 @@ public:
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_SAMPLED_IMAGE, 1); // Left eye
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_SAMPLED_IMAGE, 1); // Right eye
 
-            builder->beginBindingBank(2);
+            builder->beginBindingBank(2); // Set 2
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Atom Description Buffer
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Atom Bond Buffer
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Atom Front State Buffer
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Atom Back State Buffer
 
-            builder->beginBindingBank(2);
+            builder->beginBindingBank(2); // Set 3
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Bounding Quad Buffer
+
+            builder->beginBindingBank(32); // Set 4
+            builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_UNIFORM_BUFFER, 1); // ModelState
 
             builder->addBindingConstant(); // Timestep
             builder->addBindingConstant(); // Atom count
@@ -1550,8 +1553,8 @@ public:
         cameraState.projectionMatrix = Matrix4x4::perspective(60.0, float(cameraState.screenWidth)/float(cameraState.screenHeight), cameraState.nearDistance, cameraState.farDistance, device->hasTopLeftNdcOrigin());
         cameraState.inverseProjectionMatrix = cameraState.projectionMatrix.inverse();
 
-        cameraState.modelMatrix = Matrix4x4::withMatrix3x3AndTranslation(Matrix3x3::withScale(modelScaleFactor), modelPosition);
-        cameraState.inverseModelMatrix = cameraState.modelMatrix.inverse();
+        cameraState.atomModelMatrix = Matrix4x4::withMatrix3x3AndTranslation(Matrix3x3::withScale(modelScaleFactor), modelPosition);
+        cameraState.atomInverseModelMatrix = cameraState.atomModelMatrix.inverse();
 
         PushConstants pushConstants = {};
         pushConstants.atomCount = atomDescriptions.size();
@@ -1744,7 +1747,7 @@ public:
         commandList->usePipelineState(filmicTonemappingPipeline);
         commandList->drawArrays(3, 1, 0, 0);
 
-        commandList->endRenderPass();    
+        commandList->endRenderPass();
     }
 
     void swapBuffers()

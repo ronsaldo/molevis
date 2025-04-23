@@ -14,7 +14,7 @@ layout(std140, set = 1, binding = 0) uniform CameraStateBlock
     mat4 viewMatrix;
     mat4 inverseViewMatrix;
 
-    mat4 modelMatrix;
+    mat4 atomModelMatrix;
     mat4 inversemodelMatrix;
 } CameraState;
 

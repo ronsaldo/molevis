@@ -63,8 +63,8 @@ void main()
     AtomState state = AtomStateBuffer[atomIndex];
 
     // Get the atom world position
-    vec3 worldCenter = (CameraState.modelMatrix*vec4(state.position, 1.0)).xyz;
-    vec3 worldRadiusVertex = (CameraState.modelMatrix*vec4(state.position + vec3(desc.radius, 0.0, 0.0), 1.0)).xyz;
+    vec3 worldCenter = (CameraState.atomModelMatrix*vec4(state.position, 1.0)).xyz;
+    vec3 worldRadiusVertex = (CameraState.atomModelMatrix*vec4(state.position + vec3(desc.radius, 0.0, 0.0), 1.0)).xyz;
 
     // Compute the atom view position center.
     float radius = length(worldRadiusVertex - worldCenter);
