@@ -15,8 +15,14 @@ layout(std140, set = 1, binding = 0) uniform CameraStateBlock
     mat4 inverseViewMatrix;
 
     mat4 atomModelMatrix;
-    mat4 inversemodelMatrix;
+    mat4 atomInverseModelMatrix;
 } CameraState;
+
+layout(std140, set = 4, binding = 0) uniform ModelStateBlock
+{
+    mat4 modelMatrix;
+    mat4 inverseModelMatrix;
+} ModelState;
 
 struct AtomDescription
 {

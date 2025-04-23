@@ -40,7 +40,7 @@ struct Matrix4x4
 
     static Matrix4x4 perspective(float fovy, float aspect, float nearDistanceDistance, float farDistanceDistance, bool flipVertically)
     {
-        float fovyRad = fovy *0.5f * (M_PI / 180.0f);
+        float fovyRad = float(fovy *0.5f * (M_PI / 180.0f));
         float top = nearDistanceDistance * tan(fovyRad);
         float right = top * aspect;
 

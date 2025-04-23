@@ -9,6 +9,7 @@
 #include "AtomDescription.hpp"
 #include "AtomState.hpp"
 #include "CameraState.hpp"
+#include "ModelState.hpp"
 #include "Vector2.hpp"
 #include "Vector3.hpp"
 #include "Vector4.hpp"
@@ -78,6 +79,14 @@ double hookPotentialDerivative(double distance, double equilibriumDistance, doub
     return k * delta;
 }
 
+agpu_vertex_attrib_description RenderTargetModelVertexDesc[] = {
+    {0, 0, AGPU_TEXTURE_FORMAT_R32G32B32_FLOAT, offsetof(agpu_vr_render_model_vertex, position), 0},
+    {0, 1, AGPU_TEXTURE_FORMAT_R32G32B32_FLOAT, offsetof(agpu_vr_render_model_vertex, normal), 0},
+    {0, 2, AGPU_TEXTURE_FORMAT_R32G32_FLOAT, offsetof(agpu_vr_render_model_vertex, texcoord), 0},
+};
+
+const int RenderTargetModelVertexDescSize = sizeof(RenderTargetModelVertexDesc) / sizeof(RenderTargetModelVertexDesc[0]);
+
 struct UIElementQuad
 {
     Vector2 position;
@@ -129,6 +138,27 @@ struct Random
     }
 
     std::mt19937 rand;
+};
+
+struct TrackedDeviceModel
+{
+    agpu_buffer_ref vertexBuffer;
+    size_t vertexCount;
+    agpu_vertex_binding_ref vertexBinding;
+
+    agpu_buffer_ref indexBuffer;
+    size_t indexCount;
+};
+
+typedef std::shared_ptr<TrackedDeviceModel> TrackedDeviceModelPtr;
+struct TrackedHandController
+{
+    ModelState modelState;
+    TrackedDeviceModelPtr deviceModel;
+
+    agpu_buffer_ref modelStateBuffer;
+    agpu_texture_ref modelTexture;
+    agpu_shader_resource_binding_ref modelStateBinding;
 };
 
 class Mollevis
@@ -412,6 +442,7 @@ public:
 
             builder->beginBindingBank(32); // Set 4
             builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_UNIFORM_BUFFER, 1); // ModelState
+            builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_SAMPLED_IMAGE, 1); // Model texture
 
             builder->addBindingConstant(); // Timestep
             builder->addBindingConstant(); // Atom count
@@ -624,6 +655,28 @@ public:
             builder->setBlendFunction(-1, AGPU_BLENDING_ONE, AGPU_BLENDING_INVERTED_SRC_ALPHA, AGPU_BLENDING_OPERATION_ADD,
                 AGPU_BLENDING_ONE, AGPU_BLENDING_INVERTED_SRC_ALPHA, AGPU_BLENDING_OPERATION_ADD);
             floorGridDrawPipeline = finishBuildingPipeline(builder);
+        }
+
+        // Model
+        {
+            agpu_size vertexStride = sizeof(agpu_vr_render_model_vertex);
+            modelVertexLayout = device->createVertexLayout();
+            modelVertexLayout->addVertexAttributeBindings(1, &vertexStride, RenderTargetModelVertexDescSize, RenderTargetModelVertexDesc);
+
+            auto modelVertex = compileShaderWithCommonSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/modelVertex.glsl", AGPU_VERTEX_SHADER);
+            auto modelFragment = compileShaderWithCommonSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/modelFragment.glsl", AGPU_FRAGMENT_SHADER);
+
+            auto builder = device->createPipelineBuilder();
+            builder->setRenderTargetFormat(0, colorBufferFormat);
+            builder->setDepthStencilFormat(depthBufferFormat);
+            builder->setShaderSignature(shaderSignature);
+            builder->attachShader(modelVertex);
+            builder->attachShader(modelFragment);
+            builder->setPrimitiveType(AGPU_TRIANGLES);
+            builder->setDepthState(true, true, AGPU_GREATER_EQUAL);
+            builder->setVertexLayout(modelVertexLayout);
+            builder->setCullMode(AGPU_CULL_MODE_NONE);
+            modelPipelineState = finishBuildingPipeline(builder);
         }
 
         // Tonemapping
@@ -1059,10 +1112,6 @@ public:
             auto center = atomsBoundingBox.center();
             for(auto &atom : simulationAtomState)
                 atom.position = atom.position - center;
-
-            //printf("center %f %f %f\n", center.x, center.y, center.z);
-            //printf("min %f %f %f\n", atomsBoundingBox.min.x, atomsBoundingBox.min.y, atomsBoundingBox.min.z);
-            //printf("max %f %f %f\n", atomsBoundingBox.max.x, atomsBoundingBox.max.y, atomsBoundingBox.max.z);    
         }
 
         // Recompute the bounding
@@ -1517,6 +1566,44 @@ public:
         ++simulationIteration;
     }
 
+    TrackedDeviceModelPtr loadDeviceModel(agpu_vr_render_model *agpuModel)
+    {
+        auto model = std::make_shared<TrackedDeviceModel> ();
+        model->vertexCount = agpuModel->vertex_count;
+        model->indexCount = agpuModel->triangle_count*3;
+        auto vertexBufferSize = agpuModel->vertex_count * sizeof(agpu_vr_render_model_vertex);
+        auto indexBufferSize = model->indexCount*sizeof(uint16_t);
+
+        {
+            agpu_buffer_description desc = {0};
+            desc.size = vertexBufferSize;
+            desc.heap_type = AGPU_MEMORY_HEAP_TYPE_DEVICE_LOCAL;
+            desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_ARRAY_BUFFER);
+            desc.main_usage_mode = AGPU_ARRAY_BUFFER;
+            desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
+
+            model->vertexBuffer = device->createBuffer(&desc, agpuModel->vertices);
+        }
+        {
+            model->vertexBinding = device->createVertexBinding(modelVertexLayout);
+            model->vertexBinding->bindVertexBuffers(1, &model->vertexBuffer);
+        }
+
+        {
+            agpu_buffer_description desc = {0};
+            desc.size = indexBufferSize;
+            desc.heap_type = AGPU_MEMORY_HEAP_TYPE_DEVICE_LOCAL;
+            desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_ELEMENT_ARRAY_BUFFER);
+            desc.main_usage_mode = AGPU_ELEMENT_ARRAY_BUFFER;
+            desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
+            desc.stride = 2;
+
+            model->indexBuffer = device->createBuffer(&desc, agpuModel->indices);
+        }
+
+        return model;
+    }
+
     void updateAndRender(float delta)
     {
         uiElementQuadBuffer.clear();
@@ -1580,12 +1667,75 @@ public:
                 if(!trackedPose.is_valid)
                     continue;
 
-                if(trackedPose.device_class != AGPU_VR_TRACKED_DEVICE_CLASS_HMD)
-                    continue;
+                if(trackedPose.device_class == AGPU_VR_TRACKED_DEVICE_CLASS_CONTROLLER)
+                {
+                    auto modelMatrix = Matrix4x4::fromAgpu(trackedPose.device_to_absolute_tracking);
+                    if(trackedPose.device_role == AGPU_VR_TRACKED_DEVICE_ROLE_LEFT_HAND)
+                    {
+                        auto & controller = handControllers[0];
+                        controller.modelState.modelMatrix = modelMatrix;
+                        controller.modelState.inverseModelMatrix = modelMatrix.inverse();
+                        printf("Controller matrix ");
 
-                auto headMatrix = Matrix4x4::fromAgpu(trackedPose.device_to_absolute_tracking);
-                hmdCameraState.viewMatrix = headMatrix.inverse()*cameraState.viewMatrix;
-                hmdCameraState.inverseViewMatrix = hmdCameraState.viewMatrix.inverse();
+                        if(!controller.modelStateBinding)
+                        {
+                            agpu_buffer_description desc = {};
+                            desc.size = (sizeof(ModelState) + 255) & (-256);
+                            desc.heap_type = AGPU_MEMORY_HEAP_TYPE_HOST_TO_DEVICE;
+                            desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_UNIFORM_BUFFER);
+                            desc.main_usage_mode = AGPU_UNIFORM_BUFFER;
+                            desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
+                            controller.modelStateBuffer = device->createBuffer(&desc, nullptr);
+
+                            agpu_buffer_description bufferDesc = {};
+                            controller.modelStateBinding = shaderSignature->createShaderResourceBinding(4);
+                            controller.modelStateBinding->bindUniformBuffer(0, controller.modelStateBuffer);
+                        }
+                        controller.modelStateBuffer->uploadBufferData(0, sizeof(controller.modelState), &controller.modelState);
+
+                        if(!controller.deviceModel)
+                        {
+                            auto model = vrSystem->getTrackedDeviceRenderModel(i);
+                            if(model && model->texture)
+                                controller.deviceModel = loadDeviceModel(model);
+                        }
+                    }
+                    else if(trackedPose.device_role == AGPU_VR_TRACKED_DEVICE_ROLE_RIGHT_HAND)
+                    {
+                        auto & controller = handControllers[1];
+                        controller.modelState.modelMatrix = modelMatrix;
+                        controller.modelState.inverseModelMatrix = modelMatrix.inverse();
+
+                        if(!controller.modelStateBinding)
+                        {
+                            agpu_buffer_description desc = {};
+                            desc.size = (sizeof(ModelState) + 255) & (-256);
+                            desc.heap_type = AGPU_MEMORY_HEAP_TYPE_HOST_TO_DEVICE;
+                            desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_UNIFORM_BUFFER);
+                            desc.main_usage_mode = AGPU_UNIFORM_BUFFER;
+                            desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
+                            controller.modelStateBuffer = device->createBuffer(&desc, nullptr);
+
+                            agpu_buffer_description bufferDesc = {};
+                            controller.modelStateBinding = shaderSignature->createShaderResourceBinding(4);
+                            controller.modelStateBinding->bindUniformBuffer(0, controller.modelStateBuffer);
+                        }
+                        controller.modelStateBuffer->uploadBufferData(0, sizeof(controller.modelState), &controller.modelState);
+
+                        if(!controller.deviceModel)
+                        {
+                            auto model = vrSystem->getTrackedDeviceRenderModel(i);
+                            if(model && model->texture)
+                                controller.deviceModel = loadDeviceModel(model);
+                        }
+                    }
+                }
+                else if(trackedPose.device_class == AGPU_VR_TRACKED_DEVICE_CLASS_HMD)
+                {
+                    auto headMatrix = Matrix4x4::fromAgpu(trackedPose.device_to_absolute_tracking);
+                    hmdCameraState.viewMatrix = headMatrix.inverse()*cameraState.viewMatrix;
+                    hmdCameraState.inverseViewMatrix = hmdCameraState.viewMatrix.inverse();
+                }
             }
 
             leftEyeCameraState = hmdCameraState;
@@ -1733,6 +1883,19 @@ public:
         commandList->usePipelineState(floorGridDrawPipeline);
         commandList->drawArrays(4, 1, 0, 0);
 
+        // Hand controllers
+        for(auto &handController : handControllers)
+        {
+            if(!handController.deviceModel)
+                continue;
+
+            commandList->useShaderResources(handController.modelStateBinding);
+            commandList->usePipelineState(modelPipelineState);
+            commandList->useVertexBinding(handController.deviceModel->vertexBinding);
+            commandList->useIndexBuffer(handController.deviceModel->indexBuffer);
+            commandList->drawElements(handController.deviceModel->indexCount, 1, 0, 0, 0);
+        }
+
         // Finish the hdr rendering
         commandList->endRenderPass();
 
@@ -1844,6 +2007,10 @@ public:
     agpu_shader_ref sideBySideFragment;
     agpu_pipeline_state_ref sideBySidePipeline;
 
+    TrackedHandController handControllers[2];
+    agpu_vertex_layout_ref modelVertexLayout;
+    agpu_pipeline_state_ref modelPipelineState;
+
     agpu_sampler_ref sampler;
     agpu_shader_resource_binding_ref samplersBinding;
 
@@ -1904,7 +2071,7 @@ public:
     bool isVirtualReality = false;
 
     Vector3 modelPosition = Vector3(0, 0, 0);
-    float modelScaleFactor = 0.01;
+    float modelScaleFactor = 0.1;
 
     bool isSimulating = true;
     int simulationIteration = 0;
