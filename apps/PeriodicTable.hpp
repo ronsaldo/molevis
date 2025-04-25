@@ -73,12 +73,12 @@ struct PeriodicTable
         if(record)
         {
             desc.atomNumber = record->atomicNumber;
-            desc.radius = record->atomicRadius;
-            desc.mass = record->atomicMass;
+            desc.radius = float(record->atomicRadius);
+            desc.mass = float(record->atomicMass);
 
-            desc.lennardJonesCutoff = record->lennardJonesCutoff;
-            desc.lennardJonesEpsilon = record->lennardJonesEpsilon;
-            desc.lennardJonesSigma = record->lennardJonesSigma;
+            desc.lennardJonesCutoff = float(record->lennardJonesCutoff);
+            desc.lennardJonesEpsilon = float(record->lennardJonesEpsilon);
+            desc.lennardJonesSigma = float(record->lennardJonesSigma);
         }
 
         return desc;

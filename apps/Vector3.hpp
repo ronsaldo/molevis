@@ -34,7 +34,7 @@ struct alignas(16) Vector3
 
     float length() const
     {
-        return sqrt(x*x + y*y + z*z);
+        return float(sqrt(x*x + y*y + z*z));
     }
 
     Vector3 operator-() const

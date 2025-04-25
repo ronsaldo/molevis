@@ -41,9 +41,9 @@ int64_t getMicroseconds()
 #endif
 
 // Units simulationTimeStep
-constexpr double SimulationTimeStep = 0.001; // Picoseconds
-constexpr double BoltzmannConstantSI = 1.380649e-23; // m^2.K^-1
-constexpr double TargetTemperature = 10; // Kelvin
+const double SimulationTimeStep = 1e-3f; // Picoseconds
+const double BoltzmannConstantSI = 1.380649e-23; // m^2.K^-1
+const double TargetTemperature = 10; // Kelvin
 
 double lennardJonesPotential(double r, double sigma, double epsilon)
 {
@@ -109,7 +109,7 @@ struct Random
 
     float randFloat(float min, float max)
     {
-        return std::uniform_real_distribution<> (min, max)(rand);
+        return float(std::uniform_real_distribution<> (min, max)(rand));
     }
 
     double randDouble(float min, float max)
@@ -217,7 +217,7 @@ public:
                 }
                 else if (arg == "-scale-factor")
                 {
-                    modelScaleFactor = atof(argv[++i]);
+                    modelScaleFactor = float(atof(argv[++i]));
                 }                
                 else if (arg == "-stereo")
                 {
@@ -375,10 +375,10 @@ public:
             colorAttachment.format = colorBufferFormat;
             colorAttachment.begin_action = AGPU_ATTACHMENT_CLEAR;
             colorAttachment.end_action = AGPU_ATTACHMENT_KEEP;
-            colorAttachment.clear_value.r = 0.1;
-            colorAttachment.clear_value.g = 0.1;
-            colorAttachment.clear_value.b = 0.1;
-            colorAttachment.clear_value.a = 0;
+            colorAttachment.clear_value.r = 0.1f;
+            colorAttachment.clear_value.g = 0.1f;
+            colorAttachment.clear_value.b = 0.1f;
+            colorAttachment.clear_value.a = 0.0f;
             colorAttachment.sample_count = 1;
 
             agpu_renderpass_depth_stencil_description depthAttachment = {};
@@ -402,10 +402,10 @@ public:
             colorAttachment.format = swapChainColorBufferFormat;
             colorAttachment.begin_action = AGPU_ATTACHMENT_CLEAR;
             colorAttachment.end_action = AGPU_ATTACHMENT_KEEP;
-            colorAttachment.clear_value.r = 0;
-            colorAttachment.clear_value.g = 0;
-            colorAttachment.clear_value.b = 0;
-            colorAttachment.clear_value.a = 0;
+            colorAttachment.clear_value.r = 0.0f;
+            colorAttachment.clear_value.g = 0.0f;
+            colorAttachment.clear_value.b = 0.0f;
+            colorAttachment.clear_value.a = 0.0f;
             colorAttachment.sample_count = 1;
 
             agpu_renderpass_description description = {};
@@ -510,8 +510,8 @@ public:
         {
             agpu_texture_description desc;
             bitmapFont->getDescription(&desc);
-            bitmapFontInverseWidth = 1.0 / desc.width;
-            bitmapFontInverseHeight = 1.0 / desc.height;
+            bitmapFontInverseWidth = 1.0f / float(desc.width);
+            bitmapFontInverseHeight = 1.0f / float(desc.height);
         }
 
         // Atom description buffer
@@ -523,7 +523,7 @@ public:
             desc.main_usage_mode = AGPU_STORAGE_BUFFER;
 	        desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
             atomDescriptionBuffer = device->createBuffer(&desc, nullptr);
-            atomDescriptionBuffer->uploadBufferData(0, sizeof(AtomDescription)*atomDescriptions.size(), atomDescriptions.data());
+            atomDescriptionBuffer->uploadBufferData(0, agpu_size(sizeof(AtomDescription)*atomDescriptions.size()), atomDescriptions.data());
         }
 
         // Atom bond description buffer
@@ -535,7 +535,7 @@ public:
             desc.main_usage_mode = AGPU_STORAGE_BUFFER;
 	        desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
             atomBondDescriptionBuffer = device->createBuffer(&desc, nullptr);
-            atomBondDescriptionBuffer->uploadBufferData(0, sizeof(AtomBondDescription)*atomBondDescriptions.size(), atomBondDescriptions.data());
+            atomBondDescriptionBuffer->uploadBufferData(0, agpu_size(sizeof(AtomBondDescription)*atomBondDescriptions.size()), atomBondDescriptions.data());
         }
 
         // Atom state buffers
@@ -549,10 +549,10 @@ public:
             
             size_t uploadSize = sizeof(AtomState)*renderingAtomState.size();
             atomStateFrontBuffer = device->createBuffer(&desc, nullptr);
-            atomStateFrontBuffer->uploadBufferData(0, uploadSize, renderingAtomState.data());
+            atomStateFrontBuffer->uploadBufferData(0, agpu_size(uploadSize), renderingAtomState.data());
 
             atomStateBackBuffer = device->createBuffer(&desc, nullptr);
-            atomStateBackBuffer->uploadBufferData(0, uploadSize, renderingAtomState.data());
+            atomStateBackBuffer->uploadBufferData(0, agpu_size(uploadSize), renderingAtomState.data());
         }
 
         atomFrontBufferBinding = shaderSignature->createShaderResourceBinding(2);
@@ -888,10 +888,10 @@ public:
 
     void initializeAtomColorConventions()
     {
-        atomTypeColorMap["H"] = Vector4(0.4, 0.4, 0.4, 1.0);
-        atomTypeColorMap["C"] = Vector4(0.1, 0.1, 0.1, 1.0);
-        atomTypeColorMap["N"] = Vector4(0.1, 0.1, 0.8, 1.0);
-        atomTypeColorMap["O"] = Vector4(0.8, 0.1, 0.1, 1.0);
+        atomTypeColorMap["H"] = Vector4(0.4f, 0.4f, 0.4f, 1.0f);
+        atomTypeColorMap["C"] = Vector4(0.1f, 0.1f, 0.1f, 1.0f);
+        atomTypeColorMap["N"] = Vector4(0.1f, 0.1f, 0.8f, 1.0f);
+        atomTypeColorMap["O"] = Vector4(0.8f, 0.1f, 0.1f, 1.0f);
     }
 
     void loadPeriodicTable()
@@ -916,7 +916,7 @@ public:
         if(it != atomTypeColorMap.end())
             return it->second;
         
-        auto generatedColor = randColor.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
+        auto generatedColor = randColor.randVector4(Vector4{0.1f, 0.1f, 0.1f, 1.0f}, Vector4{0.8f, 0.8f, 0.8f, 1.0f});
         atomTypeColorMap.insert(std::make_pair(type, generatedColor));
         return generatedColor;
     }
@@ -937,20 +937,20 @@ public:
             auto chemAtomNumber = chemAtom.atomic_number();
 
             auto description = AtomDescription{};
-            description.atomNumber = chemAtomNumber ? chemAtomNumber.value() : 1;
-            description.mass = chemAtom.mass();
+            description.atomNumber = chemAtomNumber ? int(chemAtomNumber.value()) : 1;
+            description.mass = float(chemAtom.mass());
             
             description.color = getOrCreateColorForAtomType(chemAtom.type());
-            description.radius = 0.2;
+            description.radius = 0.2f;
             auto covalentRadius = chemAtom.covalent_radius();
             if(covalentRadius)
-                description.radius = covalentRadius.value();
+                description.radius = float(covalentRadius.value());
 
             auto &periodicElement = periodicTable.elements[description.atomNumber];
             {
-                description.lennardJonesCutoff = periodicElement.lennardJonesCutoff;
-                description.lennardJonesEpsilon = periodicElement.lennardJonesEpsilon;
-                description.lennardJonesSigma = periodicElement.lennardJonesSigma;
+                description.lennardJonesCutoff = float(periodicElement.lennardJonesCutoff);
+                description.lennardJonesEpsilon = float(periodicElement.lennardJonesEpsilon);
+                description.lennardJonesSigma = float(periodicElement.lennardJonesSigma);
             }
 
             {
@@ -979,14 +979,14 @@ public:
             //auto atomEquilibriumDistance = firstAtomDesc.radius + secondAtomDesc.radius;
 
             auto description = AtomBondDescription{};
-            description.firstAtomIndex = firstAtomIndex;
-            description.secondAtomIndex = secondAtomIndex;
+            description.firstAtomIndex = uint32_t(firstAtomIndex);
+            description.secondAtomIndex = uint32_t(secondAtomIndex);
             
             description.equilibriumDistance = atomEquilibriumDistance;
             description.morseWellDepth = 1;
             description.morseWellWidth = 1;
-            description.thickness = 0.1;
-            description.color = Vector4{0.8, 0.8, 0.8, 1.0};
+            description.thickness = 0.1f;
+            description.color = Vector4{0.8f, 0.8f, 0.8f, 1.0f};
             atomBondDescriptions.push_back(description);
         }
 
@@ -1032,10 +1032,10 @@ public:
 
         {
             AtomBondDescription bond = {};
-            bond.color = Vector4(0.8, 0.8, 0.8, 1.0);
+            bond.color = Vector4(0.8f, 0.8f, 0.8f, 1.0f);
             bond.firstAtomIndex = 0;
             bond.secondAtomIndex = 2;
-            bond.thickness = 0.1;
+            bond.thickness = 0.1f;
             bond.equilibriumDistance = hydrogenDesc.radius + oxygenDesc.radius;
             bond.morseWellDepth = 1;
             bond.morseWellWidth = 1;
@@ -1044,10 +1044,10 @@ public:
 
         {
             AtomBondDescription bond = {};
-            bond.color = Vector4(0.8, 0.8, 0.8, 1.0);
+            bond.color = Vector4(0.8f, 0.8f, 0.8f, 1.0f);
             bond.firstAtomIndex = 1;
             bond.secondAtomIndex = 2;
-            bond.thickness = 0.1;
+            bond.thickness = 0.1f;
             bond.equilibriumDistance = hydrogenDesc.radius + oxygenDesc.radius;
             bond.morseWellDepth = 1;
             bond.morseWellWidth = 1;
@@ -1067,11 +1067,11 @@ public:
             auto description = AtomDescription{};
             auto state = AtomSimulationState{};
 
-            description.lennardJonesEpsilon = 1.0;//rand.randFloat(1, 5);
-            description.lennardJonesSigma = 1.0;//rand.randFloat(1, 5);
-            description.radius = 1.0;//rand.randFloat(0.5, 2);
-            description.color = rand.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
-            description.mass = 1.0;
+            description.lennardJonesEpsilon = 1.0f;//rand.randFloat(1, 5);
+            description.lennardJonesSigma = 1.0f;//rand.randFloat(1, 5);
+            description.radius = 1.0f;//rand.randFloat(0.5, 2);
+            description.color = rand.randVector4(Vector4{0.1f, 0.1f, 0.1f, 1.0f}, Vector4{0.8f, 0.8f, 0.8f, 1.0f});
+            description.mass = 1.0f;
             state.position = rand.randDVector3(-10, 10);
 
             atomDescriptions.push_back(description);
@@ -1081,10 +1081,10 @@ public:
 
         for(size_t i = 0; i < bondsToGenerate; ++i)
         {
-            auto firstAtomIndex = rand.randUInt(atomDescriptions.size());
+            auto firstAtomIndex = rand.randUInt(uint32_t(atomDescriptions.size()));
             auto secondAtomIndex = firstAtomIndex;
             while(firstAtomIndex == secondAtomIndex)
-                secondAtomIndex = rand.randUInt(atomDescriptions.size());
+                secondAtomIndex = rand.randUInt(uint32_t(atomDescriptions.size()));
 
             auto description = AtomBondDescription{};
             description.firstAtomIndex = firstAtomIndex;
@@ -1092,8 +1092,8 @@ public:
             description.equilibriumDistance = rand.randFloat(5, 20);
             description.morseWellDepth = 1;
             description.morseWellWidth = 1;
-            description.thickness = rand.randFloat(0.1, 0.4);
-            description.color = rand.randVector4(Vector4{0.1, 0.1, 0.1, 1.0}, Vector4{0.8, 0.8, 0.8, 1.0});
+            description.thickness = rand.randFloat(0.1f, 0.4f);
+            description.color = rand.randVector4(Vector4{0.1f, 0.1f, 0.1f, 1.0}, Vector4{0.8f, 0.8f, 0.8f, 1.0f});
             atomBondDescriptions.push_back(description);
         }
         
@@ -1308,10 +1308,10 @@ public:
             isQuitting = true;
             break;
         case SDLK_KP_PLUS:
-            modelScaleFactor *= 1.1;
+            modelScaleFactor *= 1.1f;
             break;
         case SDLK_KP_MINUS:
-            modelScaleFactor /= 1.1;
+            modelScaleFactor /= 1.1f;
             break;
         case ' ':
             isSimulating = !isSimulating;
@@ -1535,8 +1535,8 @@ public:
         for(size_t i = 0; i < simulationAtomState.size(); ++i)
             renderingAtomState[i] = simulationAtomState[i].asRenderingState();
 
-        atomStateFrontBuffer->uploadBufferData(0, renderingAtomState.size()*sizeof(AtomState), renderingAtomState.data());
-        atomStateBackBuffer->uploadBufferData(0, renderingAtomState.size()*sizeof(AtomState), renderingAtomState.data());
+        atomStateFrontBuffer->uploadBufferData(0, agpu_size(renderingAtomState.size()*sizeof(AtomState)), renderingAtomState.data());
+        atomStateBackBuffer->uploadBufferData(0, agpu_size(renderingAtomState.size()*sizeof(AtomState)), renderingAtomState.data());
 
         ++simulationIteration;
     }
@@ -1545,17 +1545,17 @@ public:
     {
         // Reset the simulation time step.
         commandList->usePipelineState(simulationResetTimeStepPipeline);
-        commandList->dispatchCompute((renderingAtomState.size() + 31)/32, 1, 1);
+        commandList->dispatchCompute(agpu_uint((renderingAtomState.size() + 31)/32), 1, 1);
         commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
 
         // Accumulate the lennard jones potential energy.
         commandList->usePipelineState(simulationBodiesPipeline);
-        commandList->dispatchCompute((renderingAtomState.size() + 31)/32, 1, 1);
+        commandList->dispatchCompute(agpu_uint((renderingAtomState.size() + 31)/32), 1, 1);
         commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
 
         // Integrate simulation time step.
         commandList->usePipelineState(simulationIntegratePipeline);
-        commandList->dispatchCompute((renderingAtomState.size() + 31)/32, 1, 1);
+        commandList->dispatchCompute(agpu_uint((renderingAtomState.size() + 31)/32), 1, 1);
         commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
 
         // Swap the back buffer with the front buffer.
@@ -1576,7 +1576,7 @@ public:
 
         {
             agpu_buffer_description desc = {0};
-            desc.size = vertexBufferSize;
+            desc.size = agpu_size(vertexBufferSize);
             desc.heap_type = AGPU_MEMORY_HEAP_TYPE_DEVICE_LOCAL;
             desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_ARRAY_BUFFER);
             desc.main_usage_mode = AGPU_ARRAY_BUFFER;
@@ -1591,7 +1591,7 @@ public:
 
         {
             agpu_buffer_description desc = {0};
-            desc.size = indexBufferSize;
+            desc.size = agpu_size(indexBufferSize);
             desc.heap_type = AGPU_MEMORY_HEAP_TYPE_DEVICE_LOCAL;
             desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_ELEMENT_ARRAY_BUFFER);
             desc.main_usage_mode = AGPU_ELEMENT_ARRAY_BUFFER;
@@ -1631,7 +1631,7 @@ public:
         // Left drag.
         if(hasLeftDragEvent && !hasHandledLeftDragEvent)
         {
-            cameraAngle += Vector3(leftDragDeltaY, leftDragDeltaX, 0) * 0.1/M_PI;
+            cameraAngle += Vector3(float(leftDragDeltaY), float(leftDragDeltaX), 0) * float(0.1f/M_PI);
             cameraAngle.x = std::min(std::max(cameraAngle.x, float(-M_PI*0.5)), float(M_PI*0.5));
         }
         cameraMatrix = Matrix3x3::XRotation(cameraAngle.x) * Matrix3x3::YRotation(cameraAngle.y);
@@ -1639,18 +1639,18 @@ public:
         // Right drag.
         if(hasRightDragEvent && !hasHandledRightDragEvent)
         {
-            cameraTranslation += cameraMatrix * (Vector3(rightDragDeltaX, -rightDragDeltaY, 0) * 0.1f);
+            cameraTranslation += cameraMatrix * (Vector3(float(rightDragDeltaX), float(-rightDragDeltaY), 0) * 0.1f);
         }
 
         // Mouse wheel.
         if(hasWheelEvent && !hasHandledWheelEvent)
         {
-            cameraTranslation += cameraMatrix * Vector3(0, 0, -wheelDelta*0.1);
+            cameraTranslation += cameraMatrix * Vector3(0, 0, -float(wheelDelta)*0.1f);
         }
 
         char buffer[64];
         snprintf(buffer, sizeof(buffer), "%d Atoms. %d Bonds. Sim iter %05d. Frame time %0.3f ms.", int(atomDescriptions.size()), int(atomBondDescriptions.size()), simulationIteration, delta*1000.0);
-        drawString(buffer, Vector2{5, 5}, Vector4{0.1, 1.0, 0.1, 1});
+        drawString(buffer, Vector2{5, 5}, Vector4{0.1f, 1.0f, 0.1f, 1.0f});
 
         auto cameraInverseMatrix = cameraMatrix.transposed();
         auto cameraInverseTranslation = cameraInverseMatrix * -cameraTranslation;
@@ -1664,8 +1664,8 @@ public:
         cameraState.atomInverseModelMatrix = cameraState.atomModelMatrix.inverse();
 
         PushConstants pushConstants = {};
-        pushConstants.atomCount = atomDescriptions.size();
-        pushConstants.bondCount = atomBondDescriptions.size();
+        pushConstants.atomCount = uint32_t(atomDescriptions.size());
+        pushConstants.bondCount = uint32_t(atomBondDescriptions.size());
         pushConstants.timeStep = SimulationTimeStep;
 
         auto hmdCameraState = cameraState;
@@ -1683,7 +1683,7 @@ public:
             {
                 agpu_vr_tracked_device_pose trackedPose;
                 //agpu_vr_tracked_device_pose renderTrackedPose;
-                vrSystem->getCurrentTrackedDevicePoseInto(i, &trackedPose);
+                vrSystem->getCurrentTrackedDevicePoseInto(agpu_size(i), &trackedPose);
                 if(!trackedPose.is_valid)
                     continue;
 
@@ -1714,7 +1714,7 @@ public:
 
                         if(!controller.deviceModel)
                         {
-                            auto model = vrSystem->getTrackedDeviceRenderModel(i);
+                            auto model = vrSystem->getTrackedDeviceRenderModel(agpu_size(i));
                             if(model && model->texture)
                             {
                                 controller.deviceModel = loadDeviceModel(model);
@@ -1747,7 +1747,7 @@ public:
 
                         if(!controller.deviceModel)
                         {
-                            auto model = vrSystem->getTrackedDeviceRenderModel(i);
+                            auto model = vrSystem->getTrackedDeviceRenderModel(agpu_size(i));
                             if(model && model->texture)
                             {
                                 controller.deviceModel = loadDeviceModel(model);
@@ -1802,7 +1802,7 @@ public:
         // Upload the data buffers.
         leftEyeCameraStateUniformBuffer->uploadBufferData(0, sizeof(leftEyeCameraState), &leftEyeCameraState);
         rightEyeCameraStateUniformBuffer->uploadBufferData(0, sizeof(rightEyeCameraState), &rightEyeCameraState);
-        uiDataBuffer->uploadBufferData(0, uiElementQuadBuffer.size() * sizeof(UIElementQuad), uiElementQuadBuffer.data());
+        uiDataBuffer->uploadBufferData(0, agpu_size(uiElementQuadBuffer.size() * sizeof(UIElementQuad)), uiElementQuadBuffer.data());
 
         if(isSimulating && shouldSimulateInCPU)
         {
@@ -1856,7 +1856,7 @@ public:
         
         // UI element pipeline
         commandList->usePipelineState(uiPipeline);
-        commandList->drawArrays(4, uiElementQuadBuffer.size(), 0, 0);
+        commandList->drawArrays(4, agpu_uint(uiElementQuadBuffer.size()), 0, 0);
         
         commandList->endRenderPass();
 
@@ -1881,7 +1881,7 @@ public:
 
         // Screen bounding quad computations.
         commandList->usePipelineState(atomScreenQuadBufferComputationPipeline);
-        commandList->dispatchCompute((atomDescriptions.size() + 31)/32, 1, 1);
+        commandList->dispatchCompute(agpu_uint((atomDescriptions.size() + 31)/32), 1, 1);
         commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_VERTEX_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
 
         commandList->beginRenderPass(mainRenderPass, hdrTargetFramebuffer, false);
@@ -1897,14 +1897,14 @@ public:
             commandList->useShaderResources(leftEyeScreenStateBinding);
         commandList->useShaderResources(atomFrontBufferBinding);
         commandList->useShaderResources(atomBoundQuadBufferBinding);
-        commandList->drawArrays(4, atomDescriptions.size(), 0, 0);
+        commandList->drawArrays(4, agpu_uint(atomDescriptions.size()), 0, 0);
 
         // Bonds
         if(bondXRay)
             commandList->usePipelineState(bondXRayDrawPipeline);
         else
             commandList->usePipelineState(bondDrawPipeline);
-        commandList->drawArrays(4, atomBondDescriptions.size(), 0, 0);
+        commandList->drawArrays(4, agpu_uint(atomBondDescriptions.size()), 0, 0);
 
         // Floor grid
         commandList->usePipelineState(floorGridDrawPipeline);
@@ -1920,7 +1920,7 @@ public:
             commandList->usePipelineState(modelPipelineState);
             commandList->useVertexBinding(handController.deviceModel->vertexBinding);
             commandList->useIndexBuffer(handController.deviceModel->indexBuffer);
-            commandList->drawElements(handController.deviceModel->indexCount, 1, 0, 0, 0);
+            commandList->drawElements(agpu_uint(handController.deviceModel->indexCount), 1, 0, 0, 0);
         }
 
         // Finish the hdr rendering
@@ -2098,7 +2098,7 @@ public:
     bool isVirtualReality = false;
 
     Vector3 modelPosition = Vector3(0, 0, 0);
-    float modelScaleFactor = 0.1;
+    float modelScaleFactor = 0.1f;
 
     bool isSimulating = true;
     int simulationIteration = 0;
