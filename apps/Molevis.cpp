@@ -57,7 +57,7 @@ Molevis::mainStart(int argc, const char *argv[])
             }
             else if (arg == "-paused")
             {
-                isSimulating = false;
+                isSimulating.store(false);
             }
             else if (arg == "-scale-factor")
             {
@@ -82,7 +82,7 @@ Molevis::mainStart(int argc, const char *argv[])
 
     if(!inputFileName.empty())
     {
-        isSimulating = false;
+        isSimulating.store(false);
         chemfiles::Trajectory file(inputFileName);
         chemfiles::Frame frame = file.read();
 
@@ -279,7 +279,6 @@ Molevis::mainStart(int argc, const char *argv[])
         builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Atom Description Buffer
         builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Atom Bond Buffer
         builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Atom Front State Buffer
-        builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Atom Back State Buffer
 
         builder->beginBindingBank(2); // Set 3
         builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_STORAGE_BUFFER, 1); // Bounding Quad Buffer
@@ -394,22 +393,12 @@ Molevis::mainStart(int argc, const char *argv[])
         size_t uploadSize = sizeof(AtomState)*renderingAtomState.size();
         atomStateFrontBuffer = device->createBuffer(&desc, nullptr);
         atomStateFrontBuffer->uploadBufferData(0, agpu_size(uploadSize), renderingAtomState.data());
-
-        atomStateBackBuffer = device->createBuffer(&desc, nullptr);
-        atomStateBackBuffer->uploadBufferData(0, agpu_size(uploadSize), renderingAtomState.data());
     }
 
     atomFrontBufferBinding = shaderSignature->createShaderResourceBinding(2);
     atomFrontBufferBinding->bindStorageBuffer(0, atomDescriptionBuffer);
     atomFrontBufferBinding->bindStorageBuffer(1, atomBondDescriptionBuffer);
     atomFrontBufferBinding->bindStorageBuffer(2, atomStateFrontBuffer);
-    atomFrontBufferBinding->bindStorageBuffer(3, atomStateBackBuffer);
-
-    atomBackBufferBinding = shaderSignature->createShaderResourceBinding(2);
-    atomBackBufferBinding->bindStorageBuffer(0, atomDescriptionBuffer);
-    atomBackBufferBinding->bindStorageBuffer(1, atomBondDescriptionBuffer);
-    atomBackBufferBinding->bindStorageBuffer(2, atomStateBackBuffer);
-    atomBackBufferBinding->bindStorageBuffer(3, atomStateFrontBuffer);
 
     // Atom bounding quad buffer
     {
@@ -427,11 +416,6 @@ Molevis::mainStart(int argc, const char *argv[])
         atomBoundQuadBufferBinding = shaderSignature->createShaderResourceBinding(3);
         atomBoundQuadBufferBinding->bindStorageBuffer(0, atomBoundQuadBuffer);
     }
-
-    // Simulation pipelines
-    simulationResetTimeStepPipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/simulationResetTimeStep.glsl");
-    simulationBodiesPipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/simulationBodies.glsl");
-    simulationIntegratePipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/simulationIntegrate.glsl");
 
     // Atom screen quad computation shader
     atomScreenQuadBufferComputationPipeline = compileAndBuildComputeShaderPipelineWithSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/atomScreenQuadComputation.glsl");
@@ -607,6 +591,9 @@ Molevis::mainStart(int argc, const char *argv[])
     commandList = device->createCommandList(AGPU_COMMAND_LIST_TYPE_DIRECT, commandAllocator, nullptr);
     commandList->close();
 
+    // Start the simulation thread
+    startSimulationThread();
+
     // Main loop
     auto oldTime = getMicroseconds();
     while(!isQuitting)
@@ -618,6 +605,13 @@ Molevis::mainStart(int argc, const char *argv[])
         processEvents();
         updateAndRender(deltaTime * 1.0e-6f);
     }
+
+    {
+        std::unique_lock l(simulationThreadStateMutex);
+        isSimulating.store(false);
+        simulationThreadStateConditionChanged.notify_all();
+    }
+    simulationThread.join();
 
     commandQueue->finishExecution();
     swapChain.reset();
@@ -1171,7 +1165,10 @@ Molevis::onKeyDown(const SDL_KeyboardEvent &event)
         modelScaleFactor /= 1.1f;
         break;
     case ' ':
-        isSimulating = !isSimulating;
+    {
+        isSimulating.store(!isSimulating.load());
+        simulationThreadStateConditionChanged.notify_all();
+    }
         break;
     case 'x':
         bondXRay = !bondXRay;
@@ -1271,10 +1268,9 @@ Molevis::advanceLayoutRow()
 }
 
 void
-Molevis::simulateInCPU(double timestep)
+Molevis::simulateIterationInCPU(double timestep)
 {
     assert(simulationAtomState.size() == renderingAtomState.size());
-
     // Reset the net force.
     for(size_t i = 0; i < simulationAtomState.size(); ++i)
         simulationAtomState[i].netForce = DVector3(0, 0, 0);
@@ -1386,40 +1382,47 @@ Molevis::simulateInCPU(double timestep)
         auto &state = simulationAtomState[i];
         state.position = state.position + state.velocity*timestep;
     }
-    
+
+
     // Upload the new state
-    for(size_t i = 0; i < simulationAtomState.size(); ++i)
-        renderingAtomState[i] = simulationAtomState[i].asRenderingState();
+    {
+        std::unique_lock l(renderingAtomStateMutex);
+        for(size_t i = 0; i < simulationAtomState.size(); ++i)
+            renderingAtomState[i] = simulationAtomState[i].asRenderingState();
+        renderingAtomStateDirty = true;
+    }
 
-    atomStateFrontBuffer->uploadBufferData(0, agpu_size(renderingAtomState.size()*sizeof(AtomState)), renderingAtomState.data());
-    atomStateBackBuffer->uploadBufferData(0, agpu_size(renderingAtomState.size()*sizeof(AtomState)), renderingAtomState.data());
-
-    ++simulationIteration;
+    simulationIteration.fetch_add(1);
 }
 
-void Molevis::emitSimulationStepCommands()
+void
+Molevis::simulationThreadEntry()
 {
-    // Reset the simulation time step.
-    commandList->usePipelineState(simulationResetTimeStepPipeline);
-    commandList->dispatchCompute(agpu_uint((renderingAtomState.size() + 31)/32), 1, 1);
-    commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
+    while(!isQuitting.load())
+    {
+        bool shouldStepSimulation = false;
+        {
+            std::unique_lock l(simulationThreadStateMutex);
+            while(!isQuitting && !isSimulating)
+                simulationThreadStateConditionChanged.wait(l);
 
-    // Accumulate the lennard jones potential energy.
-    commandList->usePipelineState(simulationBodiesPipeline);
-    commandList->dispatchCompute(agpu_uint((renderingAtomState.size() + 31)/32), 1, 1);
-    commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
+            if(isQuitting)
+                return;
+            shouldStepSimulation = isSimulating;
+        }
 
-    // Integrate simulation time step.
-    commandList->usePipelineState(simulationIntegratePipeline);
-    commandList->dispatchCompute(agpu_uint((renderingAtomState.size() + 31)/32), 1, 1);
-    commandList->memoryBarrier(AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_PIPELINE_STAGE_COMPUTE_SHADER, AGPU_ACCESS_SHADER_WRITE, AGPU_ACCESS_SHADER_READ);
+        if(shouldStepSimulation)
+            simulateIterationInCPU(SimulationTimeStep);
+    }
 
-    // Swap the back buffer with the front buffer.
-    std::swap(atomBackBufferBinding, atomFrontBufferBinding);
-    std::swap(atomStateFrontBuffer, atomStateFrontBuffer);
-    commandList->useComputeShaderResources(atomFrontBufferBinding);
+}
 
-    ++simulationIteration;
+void Molevis::startSimulationThread()
+{
+    std::thread t([=](){
+        simulationThreadEntry();
+    });
+    simulationThread.swap(t);
 }
 
 TrackedDeviceModelPtr Molevis::loadDeviceModel(agpu_vr_render_model *agpuModel)
@@ -1509,7 +1512,7 @@ Molevis::updateAndRender(float delta)
     }
 
     char buffer[64];
-    snprintf(buffer, sizeof(buffer), "%d Atoms. %d Bonds. Sim iter %05d. Frame time %0.3f ms.", int(atomDescriptions.size()), int(atomBondDescriptions.size()), simulationIteration, delta*1000.0);
+    snprintf(buffer, sizeof(buffer), "%d Atoms. %d Bonds. Sim iter %05d. Frame time %0.3f ms.", int(atomDescriptions.size()), int(atomBondDescriptions.size()), simulationIteration.load(), delta*1000.0);
     drawString(buffer, Vector2{5, 5}, Vector4{0.1f, 1.0f, 0.1f, 1.0f});
 
     auto cameraInverseMatrix = cameraMatrix.transposed();
@@ -1566,7 +1569,6 @@ Molevis::updateAndRender(float delta)
                         desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
                         controller.modelStateBuffer = device->createBuffer(&desc, nullptr);
 
-                        agpu_buffer_description bufferDesc = {};
                         controller.modelStateBinding = shaderSignature->createShaderResourceBinding(4);
                         controller.modelStateBinding->bindUniformBuffer(0, controller.modelStateBuffer);
                     }
@@ -1599,7 +1601,6 @@ Molevis::updateAndRender(float delta)
                         desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
                         controller.modelStateBuffer = device->createBuffer(&desc, nullptr);
 
-                        agpu_buffer_description bufferDesc = {};
                         controller.modelStateBinding = shaderSignature->createShaderResourceBinding(4);
                         controller.modelStateBinding->bindUniformBuffer(0, controller.modelStateBuffer);
                     }
@@ -1664,11 +1665,16 @@ Molevis::updateAndRender(float delta)
     rightEyeCameraStateUniformBuffer->uploadBufferData(0, sizeof(rightEyeCameraState), &rightEyeCameraState);
     uiDataBuffer->uploadBufferData(0, agpu_size(uiElementQuadBuffer.size() * sizeof(UIElementQuad)), uiElementQuadBuffer.data());
 
-    if(isSimulating && shouldSimulateInCPU)
+    // Upload the new state
     {
-        simulateInCPU(SimulationTimeStep);
+        std::unique_lock l(renderingAtomStateMutex);
+        if(renderingAtomStateDirty)
+        {
+            atomStateFrontBuffer->uploadBufferData(0, agpu_size(renderingAtomState.size()*sizeof(AtomState)), renderingAtomState.data());
+            renderingAtomStateDirty = false;
+        }
     }
-
+    
     // Build the command list
     commandAllocator->reset();
     commandList->reset(commandAllocator, nullptr);
@@ -1679,12 +1685,6 @@ Molevis::updateAndRender(float delta)
     commandList->useComputeShaderResources(atomFrontBufferBinding);
     commandList->useComputeShaderResources(atomBoundQuadBufferBinding);
     commandList->pushConstants(0, sizeof(pushConstants), &pushConstants);
-
-    // Are we simulating in GPU?
-    if(isSimulating && !shouldSimulateInCPU)
-    {
-        emitSimulationStepCommands();
-    }
 
     if(isStereo || isVirtualReality)
     {

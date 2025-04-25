@@ -93,11 +93,6 @@ layout(std430, set = 2, binding = 2) buffer AtomStateBufferBlock
     AtomState AtomStateBuffer[];
 };
 
-layout(std430, set = 2, binding = 3) buffer OldAtomStateBufferBlock
-{
-    AtomState OldAtomStateBuffer[];
-};
-
 layout(std430, set = 3, binding = 0) buffer ScreenBoundingQuadBufferBlock
 {
     ScreenBoundingQuad ScreenBoundingQuadBuffer[];

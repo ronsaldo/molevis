@@ -28,7 +28,10 @@
 #include <string>
 #include <random>
 #include <time.h>
-
+#include <atomic>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
 
 #ifdef _WIN32
 inline int64_t getMicroseconds()
@@ -227,10 +230,9 @@ public:
     void beginLayout(float x = 5, float y = 5);
     void advanceLayoutRow();
 
-    bool shouldSimulateInCPU = true;
-
-    void simulateInCPU(double timestep);
-    void emitSimulationStepCommands();
+    void simulateIterationInCPU(double timestep);
+    void simulationThreadEntry();
+    void startSimulationThread();
 
     TrackedDeviceModelPtr loadDeviceModel(agpu_vr_render_model *agpuModel);
     agpu_texture_ref loadVRModelTexture(agpu_vr_render_model_texture *vrTexture);
@@ -243,7 +245,7 @@ public:
     agpu_texture_ref loadTexture(const char *fileName, bool nonColorData);
     
     SDL_Window *window = nullptr;
-    bool isQuitting = false;
+    std::atomic_bool isQuitting = false;
 
     agpu_texture_format colorBufferFormat = AGPU_TEXTURE_FORMAT_R16G16B16A16_FLOAT;
     agpu_texture_format swapChainColorBufferFormat = AGPU_TEXTURE_FORMAT_B8G8R8A8_UNORM_SRGB;
@@ -319,18 +321,20 @@ public:
 
     std::vector<AtomDescription> atomDescriptions; 
     std::vector<AtomBondDescription> atomBondDescriptions; 
-    std::vector<AtomState> renderingAtomState;
     std::vector<AtomSimulationState> simulationAtomState;
+
+    std::mutex renderingAtomStateMutex;
+    std::vector<AtomState> renderingAtomState;
+    bool renderingAtomStateDirty = true;
+
+    std::mutex simulationThreadStateMutex;
+    std::condition_variable simulationThreadStateConditionChanged;
+    std::thread simulationThread;
+
     agpu_buffer_ref atomDescriptionBuffer;
     agpu_buffer_ref atomBondDescriptionBuffer;
     agpu_buffer_ref atomStateFrontBuffer;
-    agpu_buffer_ref atomStateBackBuffer;
     agpu_shader_resource_binding_ref atomFrontBufferBinding;
-    agpu_shader_resource_binding_ref atomBackBufferBinding;
-
-    agpu_pipeline_state_ref simulationResetTimeStepPipeline;
-    agpu_pipeline_state_ref simulationBodiesPipeline;
-    agpu_pipeline_state_ref simulationIntegratePipeline;
 
     agpu_texture_ref bitmapFont;
     float bitmapFontScale = 1.5;
@@ -354,8 +358,8 @@ public:
     Vector3 modelPosition = Vector3(0, 0, 0);
     float modelScaleFactor = 0.1f;
 
-    bool isSimulating = true;
-    int simulationIteration = 0;
+    std::atomic_bool isSimulating = true;
+    std::atomic_int simulationIteration = 0;
 
     bool hasWheelEvent = false;
     bool hasHandledWheelEvent = false;
