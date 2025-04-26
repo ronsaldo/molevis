@@ -1535,7 +1535,7 @@ Molevis::updateAndRender(float delta)
     cameraWorldFrustum = cameraViewFrustum.transformedWith(cameraState.inverseViewMatrix);
     cameraAtomFrustum = cameraWorldFrustum.transformedWith(cameraState.atomInverseModelMatrix);
 
-    if(!hasLeftDragEvent && !hasRightDragEvent)
+    if(!hasLeftDragEvent && !hasRightDragEvent && !isVirtualReality)
     {
         auto normalizedPosition = Vector2(float(mousePositionX) / float(displayWidth), 1.0f - float(mousePositionY) / float(displayHeight));
         //printf("np %f %f\n", normalizedPosition.x, normalizedPosition.y);
