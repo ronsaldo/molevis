@@ -1772,10 +1772,6 @@ Molevis::emitRenderCommands()
         commandList->drawArrays(3, 1, 0, 0);
     }
     
-    // UI element pipeline
-    commandList->usePipelineState(uiPipeline);
-    commandList->drawArrays(4, agpu_uint(uiElementQuadBuffer.size()), 0, 0);
-    
     commandList->endRenderPass();
 
     commandList->close();
@@ -1855,6 +1851,10 @@ void Molevis::emitCommandsForEyeRendering(bool isRightEye)
     commandList->usePipelineState(filmicTonemappingPipeline);
     commandList->drawArrays(3, 1, 0, 0);
 
+    // UI element pipeline
+    commandList->usePipelineState(uiPipeline);
+    commandList->drawArrays(4, agpu_uint(uiElementQuadBuffer.size()), 0, 0);
+    
     commandList->endRenderPass();
 }
 
