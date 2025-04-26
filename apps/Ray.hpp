@@ -14,6 +14,15 @@ struct Ray
         return ray;
     }
 
+    static Ray withOriginAndDirection(const Vector3 &origin, const Vector3 &direction)
+    {
+        Ray ray;
+        ray.origin = origin;
+        ray.direction = direction;
+        ray.inverseDirection = direction.reciprocal();
+        return ray;
+    }
+
     Vector3 origin;
     Vector3 direction;
     Vector3 inverseDirection;

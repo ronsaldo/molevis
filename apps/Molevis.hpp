@@ -167,6 +167,15 @@ struct TrackedHandController
     agpu_buffer_ref modelStateBuffer;
     agpu_texture_ref modelTexture;
     agpu_shader_resource_binding_ref modelStateBinding;
+
+    uint64_t touchedButtons;
+    uint64_t pressedButtons;
+    Vector2 joysticAxisState;
+    Vector2 trackpadAxisState;
+    Vector2 triggerAxisState;
+    void convertState(const agpu_vr_controller_state &sourceState);
+    void convertAxis(int index, const agpu_vr_controller_axis_state &sourceState);
+
 };
 
 class Molevis

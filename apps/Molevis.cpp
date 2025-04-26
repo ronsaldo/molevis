@@ -12,6 +12,41 @@ agpu_vertex_attrib_description RenderTargetModelVertexDesc[] = {
 
 const int RenderTargetModelVertexDescSize = sizeof(RenderTargetModelVertexDesc) / sizeof(RenderTargetModelVertexDesc[0]);
 
+void
+TrackedHandController::convertState(const agpu_vr_controller_state &sourceState)
+{
+    touchedButtons = sourceState.buttons_touched;
+    pressedButtons = sourceState.buttons_pressed;
+    convertAxis(0, sourceState.axis0);
+    convertAxis(1, sourceState.axis1);
+    convertAxis(2, sourceState.axis2);
+    convertAxis(3, sourceState.axis3);
+    convertAxis(4, sourceState.axis4);
+}
+
+void
+TrackedHandController::convertAxis(int index, const agpu_vr_controller_axis_state &sourceState)
+{
+    switch(sourceState.type)
+    {
+    case AGPU_VR_CONTROLLER_AXIS_TRACK_PAD:
+        trackpadAxisState = Vector2(sourceState.x, sourceState.y);
+        //printf("%d: trackpadAxisState %f %f\n", index, trackpadAxisState.x, trackpadAxisState.y);
+        break;
+    case AGPU_VR_CONTROLLER_AXIS_JOYSTICK:
+        joysticAxisState = Vector2(sourceState.x, sourceState.y);
+        //printf("%d: joysticAxisState %f %f\n", index, joysticAxisState.x, joysticAxisState.y);
+        break;
+    case AGPU_VR_CONTROLLER_AXIS_TRIGGER:
+        if(index == 1)
+            triggerAxisState = Vector2(sourceState.x, sourceState.y);
+        //printf("%d: triggerAxisState %f %f\n", index, triggerAxisState.x, triggerAxisState.y);
+        break;
+    default:
+        break;
+    }
+}
+
 int
 Molevis::mainStart(int argc, const char *argv[])
 {
@@ -1607,6 +1642,7 @@ Molevis::updateVRState()
     vrSystem->waitAndFetchPoses();
     float nearDistance = cameraState.nearDistance;
     float farDistance = cameraState.farDistance;
+    currentHighlightedAtom = -1;
 
     size_t poseCount = vrSystem->getCurrentTrackedDevicePoseCount();
     for(size_t i = 0; i < poseCount; ++i)
@@ -1625,6 +1661,22 @@ Molevis::updateVRState()
                 auto & controller = handControllers[0];
                 controller.modelState.modelMatrix = cameraState.inverseViewMatrix*modelMatrix;
                 controller.modelState.inverseModelMatrix = modelMatrix.inverse();
+
+                agpu_vr_controller_state controllerState;
+                if(vrSystem->getControllerState(agpu_size(i), &controllerState))
+                {
+                    controller.convertState(controllerState);
+                    if(controller.triggerAxisState.x > 0.5f)
+                    {
+                        Vector3 origin = (cameraState.atomInverseModelMatrix * (controller.modelState.modelMatrix * Vector4(0, 0, 0, 1))).xyz();
+                        Vector3 direction = (cameraState.atomInverseModelMatrix * (controller.modelState.modelMatrix * Vector4(0, 0, -1, 0))).xyz().normalized();
+                        auto ray = Ray::withOriginAndDirection(origin, direction);
+                        printf("Left origin %f %f %f direction %f %f %f\n",
+                            origin.x, origin.y, origin.z,
+                            direction.x, direction.y, direction.z);
+                        findHighlightedAtom(ray);
+                    }
+                }
 
                 if(!controller.modelStateBinding)
                 {
@@ -1651,12 +1703,29 @@ Molevis::updateVRState()
                         controller.modelStateBinding->bindSampledTextureView(1, texture->getOrCreateFullView());
                     }
                 }
+
             }
             else if(trackedPose.device_role == AGPU_VR_TRACKED_DEVICE_ROLE_RIGHT_HAND)
             {
                 auto & controller = handControllers[1];
                 controller.modelState.modelMatrix = cameraState.inverseViewMatrix*modelMatrix;
                 controller.modelState.inverseModelMatrix = modelMatrix.inverse();
+
+                agpu_vr_controller_state controllerState;
+                if(vrSystem->getControllerState(agpu_size(i), &controllerState))
+                {
+                    controller.convertState(controllerState);
+                    if(controller.triggerAxisState.x > 0.5f)
+                    {
+                        Vector3 origin = (cameraState.atomInverseModelMatrix * (controller.modelState.modelMatrix * Vector4(0, 0, 0, 1))).xyz();
+                        Vector3 direction = (cameraState.atomInverseModelMatrix * (controller.modelState.modelMatrix * Vector4(0, 0, -1, 0))).xyz().normalized();
+                        auto ray = Ray::withOriginAndDirection(origin, direction);
+                        printf("Right origin %f %f %f direction %f %f %f\n",
+                            origin.x, origin.y, origin.z,
+                            direction.x, direction.y, direction.z);
+                        findHighlightedAtom(ray);
+                    }
+                }
 
                 if(!controller.modelStateBinding)
                 {
