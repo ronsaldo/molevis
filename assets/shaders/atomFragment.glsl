@@ -52,6 +52,9 @@ void main()
 
     // Premultiplied alpha
     vec4 baseColor = vec4(desc.color.rgb * desc.color.a, desc.color.a);
+    if(int(inAtomIndex) == currentHiglightedAtom)
+        baseColor = mix(baseColor, vec4(0.8, 0.8, 0.01, baseColor.a), 0.25);
+
     float NdotV = max(0.0, dot(N, V));
 
     outFragColor = vec4(baseColor.rgb*(0.2 + NdotV*0.8), baseColor.a);

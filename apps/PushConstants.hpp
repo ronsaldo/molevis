@@ -1,13 +1,11 @@
-#ifndef MOLLEVIS_PUSH_CONSTANTS_HPP
-#define MOLLEVIS_PUSH_CONSTANTS_HPP
+#ifndef PUSH_CONSTANTS_HPP
+#define PUSH_CONSTANTS_HPP
 
 #include <stdint.h>
 
 struct PushConstants
 {
-    float timeStep;
-    uint32_t atomCount;
-    uint32_t bondCount;
+    int32_t highlighedAtom;
 };
 
-#endif //MOLLEVIS_PUSH_CONSTANTS_HPP
+#endif //PUSH_CONSTANTS_HPP

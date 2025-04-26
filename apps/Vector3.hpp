@@ -1,6 +1,8 @@
 #ifndef MOLLEVIS_VECTOR3_HPP
 #define MOLLEVIS_VECTOR3_HPP
 
+#include <math.h>
+
 struct Vector4;
 
 struct alignas(16) Vector3
@@ -35,6 +37,19 @@ struct alignas(16) Vector3
     float length() const
     {
         return float(sqrt(x*x + y*y + z*z));
+    }
+
+    Vector3 normalized() const
+    {
+        auto l = length();
+        if(l < 1e-6)
+            return Vector3(0);
+        return Vector3(x / l, y/ l, z / l);
+    }
+
+    Vector3 reciprocal() const
+    {
+        return Vector3(1.0f/x, 1.0f/y, 1.0f/z);
     }
 
     Vector3 operator-() const
@@ -73,6 +88,17 @@ struct alignas(16) Vector3
 
 struct PackedVector3
 {
+    PackedVector3() = default;
+    PackedVector3(const Vector3 &v)
+        : x(v.x), y(v.y), z(v.z) {}
+    PackedVector3(float cx, float cy, float cz)
+        : x(cx), y(cy), z(cz) {}
+
+    Vector3 asVector3() const
+    {
+        return Vector3(x, y, z);
+    }
+    
     float x, y, z;
 };
 

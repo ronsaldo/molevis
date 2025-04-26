@@ -19,7 +19,7 @@
 #include "Vector3.hpp"
 #include "Vector4.hpp"
 #include "Matrix4x4.hpp"
-#include "PushConstants.hpp"
+#include "Frustum.hpp"
 #include <chemfiles.hpp>
 #include <stdint.h>
 #include <stdio.h>
@@ -238,6 +238,9 @@ public:
     agpu_texture_ref loadVRModelTexture(agpu_vr_render_model_texture *vrTexture);
 
     void updateAndRender(float delta);
+    void findHighlightedAtom(const Ray &ray);
+    void updateVRState();
+    void emitRenderCommands();
     void emitCommandsForEyeRendering(bool isRightEye);
 
     void swapBuffers();
@@ -345,9 +348,18 @@ public:
     int bitmapFontColumns = 16;
 
     CameraState cameraState;
+    CameraState hmdCameraState = cameraState;
+    CameraState leftEyeCameraState = hmdCameraState;
+    CameraState rightEyeCameraState = hmdCameraState;
+
     Matrix3x3 cameraMatrix = Matrix3x3::identity();
     Vector3 cameraAngle = Vector3{0, 0, 0};
     Vector3 cameraTranslation = Vector3{0, 0.5, 2};
+    Frustum cameraViewFrustum;
+    Frustum cameraWorldFrustum;
+    Frustum cameraAtomFrustum;
+
+    int32_t currentHighlightedAtom = -1;
 
     size_t UIElementQuadBufferMaxCapacity = 4192;
     std::vector<UIElementQuad> uiElementQuadBuffer;
@@ -378,6 +390,9 @@ public:
     int rightDragStartY = 0;
     int rightDragDeltaX = 0;
     int rightDragDeltaY = 0;
+
+    int mousePositionX = 0;
+    int mousePositionY = 0;
 
     int displayWidth = 640;
     int displayHeight = 480;

@@ -100,9 +100,7 @@ layout(std430, set = 3, binding = 0) buffer ScreenBoundingQuadBufferBlock
 
 layout(push_constant) uniform PushConstants
 {
-    float timeStep;
-    uint atomCount;
-    uint bondCount;
+    int currentHiglightedAtom;
 };
 
 float lennardJonesDerivative(float r, float sigma, float epsilon)

@@ -1,6 +1,8 @@
 
 
 #include "Molevis.hpp"
+#include "Sphere.hpp"
+#include "PushConstants.hpp"
 
 agpu_vertex_attrib_description RenderTargetModelVertexDesc[] = {
     {0, 0, AGPU_TEXTURE_FORMAT_R32G32B32_FLOAT, offsetof(agpu_vr_render_model_vertex, position), 0},
@@ -287,9 +289,7 @@ Molevis::mainStart(int argc, const char *argv[])
         builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_UNIFORM_BUFFER, 1); // ModelState
         builder->addBindingBankElement(AGPU_SHADER_BINDING_TYPE_SAMPLED_IMAGE, 1); // Model texture
 
-        builder->addBindingConstant(); // Timestep
-        builder->addBindingConstant(); // Atom count
-        builder->addBindingConstant(); // Bond count
+        builder->addBindingConstant(); // Highlighted atom
 
         shaderSignature = builder->build();
         if(!shaderSignature)
@@ -1201,6 +1201,9 @@ Molevis::onMouseMotion(const SDL_MouseMotionEvent &event)
         rightDragDeltaX = event.xrel;
         rightDragDeltaY = event.yrel;
     }
+    
+    mousePositionX = event.x;
+    mousePositionY = event.y;
 }
 
 void Molevis::onMouseWheel(const SDL_MouseWheelEvent &event)
@@ -1517,148 +1520,35 @@ Molevis::updateAndRender(float delta)
 
     auto cameraInverseMatrix = cameraMatrix.transposed();
     auto cameraInverseTranslation = cameraInverseMatrix * -cameraTranslation;
+    float cameraFovY = 60.0;
+    float cameraAspect = float(cameraState.screenWidth)/float(cameraState.screenHeight);
 
     cameraState.viewMatrix = Matrix4x4::withMatrix3x3AndTranslation(cameraInverseMatrix, cameraInverseTranslation);
     cameraState.inverseViewMatrix = cameraState.viewMatrix.inverse();
-    cameraState.projectionMatrix = Matrix4x4::perspective(60.0, float(cameraState.screenWidth)/float(cameraState.screenHeight), cameraState.nearDistance, cameraState.farDistance, device->hasTopLeftNdcOrigin());
+    cameraState.projectionMatrix = Matrix4x4::perspective(cameraFovY, cameraAspect, cameraState.nearDistance, cameraState.farDistance, device->hasTopLeftNdcOrigin());
     cameraState.inverseProjectionMatrix = cameraState.projectionMatrix.inverse();
 
     cameraState.atomModelMatrix = Matrix4x4::withMatrix3x3AndTranslation(Matrix3x3::withScale(modelScaleFactor), modelPosition);
     cameraState.atomInverseModelMatrix = cameraState.atomModelMatrix.inverse();
 
-    PushConstants pushConstants = {};
-    pushConstants.atomCount = uint32_t(atomDescriptions.size());
-    pushConstants.bondCount = uint32_t(atomBondDescriptions.size());
-    pushConstants.timeStep = SimulationTimeStep;
+    cameraViewFrustum.makePerspective(60.0, cameraAspect, cameraState.nearDistance, cameraState.farDistance);
+    cameraWorldFrustum = cameraViewFrustum.transformedWith(cameraState.inverseViewMatrix);
+    cameraAtomFrustum = cameraWorldFrustum.transformedWith(cameraState.atomInverseModelMatrix);
 
-    auto hmdCameraState = cameraState;
-    auto leftEyeCameraState = hmdCameraState;
-    auto rightEyeCameraState = hmdCameraState;
+    if(!hasLeftDragEvent && !hasRightDragEvent)
+    {
+        auto normalizedPosition = Vector2(float(mousePositionX) / float(displayWidth), 1.0f - float(mousePositionY) / float(displayHeight));
+        //printf("np %f %f\n", normalizedPosition.x, normalizedPosition.y);
+        Ray frustumRay = cameraAtomFrustum.rayForNormalizedPoint(normalizedPosition);
+        findHighlightedAtom(frustumRay);
+    }
+
+    hmdCameraState = cameraState;
+    leftEyeCameraState = hmdCameraState;
+    rightEyeCameraState = hmdCameraState;
 
     if(isVirtualReality)
-    {
-        vrSystem->waitAndFetchPoses();
-        float nearDistance = cameraState.nearDistance;
-        float farDistance = cameraState.farDistance;
-
-        size_t poseCount = vrSystem->getCurrentTrackedDevicePoseCount();
-        for(size_t i = 0; i < poseCount; ++i)
-        {
-            agpu_vr_tracked_device_pose trackedPose;
-            //agpu_vr_tracked_device_pose renderTrackedPose;
-            vrSystem->getCurrentTrackedDevicePoseInto(agpu_size(i), &trackedPose);
-            if(!trackedPose.is_valid)
-                continue;
-
-            if(trackedPose.device_class == AGPU_VR_TRACKED_DEVICE_CLASS_CONTROLLER)
-            {
-                auto modelMatrix = Matrix4x4::fromAgpu(trackedPose.device_to_absolute_tracking);
-                if(trackedPose.device_role == AGPU_VR_TRACKED_DEVICE_ROLE_LEFT_HAND)
-                {
-                    auto & controller = handControllers[0];
-                    controller.modelState.modelMatrix = cameraState.inverseViewMatrix*modelMatrix;
-                    controller.modelState.inverseModelMatrix = modelMatrix.inverse();
-
-                    if(!controller.modelStateBinding)
-                    {
-                        agpu_buffer_description desc = {};
-                        desc.size = (sizeof(ModelState) + 255) & (-256);
-                        desc.heap_type = AGPU_MEMORY_HEAP_TYPE_HOST_TO_DEVICE;
-                        desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_UNIFORM_BUFFER);
-                        desc.main_usage_mode = AGPU_UNIFORM_BUFFER;
-                        desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
-                        controller.modelStateBuffer = device->createBuffer(&desc, nullptr);
-
-                        controller.modelStateBinding = shaderSignature->createShaderResourceBinding(4);
-                        controller.modelStateBinding->bindUniformBuffer(0, controller.modelStateBuffer);
-                    }
-                    controller.modelStateBuffer->uploadBufferData(0, sizeof(controller.modelState), &controller.modelState);
-
-                    if(!controller.deviceModel)
-                    {
-                        auto model = vrSystem->getTrackedDeviceRenderModel(agpu_size(i));
-                        if(model && model->texture)
-                        {
-                            controller.deviceModel = loadDeviceModel(model);
-                            auto texture = loadVRModelTexture(model->texture);
-                            controller.modelStateBinding->bindSampledTextureView(1, texture->getOrCreateFullView());
-                        }
-                    }
-                }
-                else if(trackedPose.device_role == AGPU_VR_TRACKED_DEVICE_ROLE_RIGHT_HAND)
-                {
-                    auto & controller = handControllers[1];
-                    controller.modelState.modelMatrix = cameraState.inverseViewMatrix*modelMatrix;
-                    controller.modelState.inverseModelMatrix = modelMatrix.inverse();
-
-                    if(!controller.modelStateBinding)
-                    {
-                        agpu_buffer_description desc = {};
-                        desc.size = (sizeof(ModelState) + 255) & (-256);
-                        desc.heap_type = AGPU_MEMORY_HEAP_TYPE_HOST_TO_DEVICE;
-                        desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_UNIFORM_BUFFER);
-                        desc.main_usage_mode = AGPU_UNIFORM_BUFFER;
-                        desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
-                        controller.modelStateBuffer = device->createBuffer(&desc, nullptr);
-
-                        controller.modelStateBinding = shaderSignature->createShaderResourceBinding(4);
-                        controller.modelStateBinding->bindUniformBuffer(0, controller.modelStateBuffer);
-                    }
-                    controller.modelStateBuffer->uploadBufferData(0, sizeof(controller.modelState), &controller.modelState);
-
-                    if(!controller.deviceModel)
-                    {
-                        auto model = vrSystem->getTrackedDeviceRenderModel(agpu_size(i));
-                        if(model && model->texture)
-                        {
-                            controller.deviceModel = loadDeviceModel(model);
-                            auto texture = loadVRModelTexture(model->texture);
-                            controller.modelStateBinding->bindSampledTextureView(1, texture->getOrCreateFullView());
-                        }
-                    }
-                }
-            }
-            else if(trackedPose.device_class == AGPU_VR_TRACKED_DEVICE_CLASS_HMD)
-            {
-                auto headMatrix = Matrix4x4::fromAgpu(trackedPose.device_to_absolute_tracking);
-                hmdCameraState.viewMatrix = headMatrix.inverse()*cameraState.viewMatrix;
-                hmdCameraState.inverseViewMatrix = hmdCameraState.viewMatrix.inverse();
-            }
-        }
-
-        leftEyeCameraState = hmdCameraState;
-        rightEyeCameraState = hmdCameraState;
-
-        // Left eye
-        {
-            agpu_frustum_tangents tangents;
-            vrSystem->getProjectionFrustumTangents(AGPU_VR_EYE_LEFT, &tangents);
-            leftEyeCameraState.projectionMatrix = Matrix4x4::frustum(tangents.left*nearDistance, tangents.right*nearDistance, tangents.bottom*nearDistance, tangents.top*nearDistance, nearDistance, farDistance, device->hasTopLeftNdcOrigin());
-            leftEyeCameraState.inverseProjectionMatrix = leftEyeCameraState.projectionMatrix.inverse();
-
-            agpu_matrix4x4f eyeToHead;
-            vrSystem->getEyeToHeadTransform(AGPU_VR_EYE_LEFT, &eyeToHead);
-
-            auto eyeToHeadMatrix = Matrix4x4::fromAgpu(eyeToHead);
-            leftEyeCameraState.viewMatrix = eyeToHeadMatrix.inverse() * leftEyeCameraState.viewMatrix;
-            leftEyeCameraState.inverseViewMatrix = leftEyeCameraState.viewMatrix.inverse();
-        }
-
-        // right eye
-        {
-            agpu_frustum_tangents tangents;
-            vrSystem->getProjectionFrustumTangents(AGPU_VR_EYE_RIGHT, &tangents);
-            rightEyeCameraState.projectionMatrix = Matrix4x4::frustum(tangents.left*nearDistance, tangents.right*nearDistance, tangents.bottom*nearDistance, tangents.top*nearDistance, nearDistance, farDistance, device->hasTopLeftNdcOrigin());
-            rightEyeCameraState.inverseProjectionMatrix = rightEyeCameraState.projectionMatrix.inverse();
-
-            agpu_matrix4x4f eyeToHead;
-            vrSystem->getEyeToHeadTransform(AGPU_VR_EYE_RIGHT, &eyeToHead);
-
-            auto eyeToHeadMatrix = Matrix4x4::fromAgpu(eyeToHead);
-            rightEyeCameraState.viewMatrix = eyeToHeadMatrix.inverse() * rightEyeCameraState.viewMatrix;
-            rightEyeCameraState.inverseViewMatrix = rightEyeCameraState.viewMatrix.inverse();
-        }
-    }
+        updateVRState();
 
     // Upload the data buffers.
     leftEyeCameraStateUniformBuffer->uploadBufferData(0, sizeof(leftEyeCameraState), &leftEyeCameraState);
@@ -1674,7 +1564,172 @@ Molevis::updateAndRender(float delta)
             renderingAtomStateDirty = false;
         }
     }
-    
+
+    emitRenderCommands();
+}
+
+
+void
+Molevis::findHighlightedAtom(const Ray &ray)
+{
+    int bestFound = -1;
+    float bestFoundDistance = INFINITY;
+
+    {
+        std::unique_lock l(renderingAtomStateMutex);
+        for(size_t i = 0; i < renderingAtomState.size(); ++i)
+        {
+            auto &atom = renderingAtomState[i];
+
+            Sphere atomSphere;
+            atomSphere.center = atom.position;
+            atomSphere.radius = atomDescriptions[i].radius;
+
+            Vector2 lambdas = {};
+            if(atomSphere.rayIntersectionTest(ray, lambdas))
+            {
+                auto minLambda = std::min(lambdas.x, lambdas.y);
+                if(minLambda < bestFoundDistance)
+                {
+                    bestFound = int(i);
+                    bestFoundDistance = minLambda;
+                }
+            }
+        }
+    }
+
+    currentHighlightedAtom = bestFound;
+}
+
+void
+Molevis::updateVRState()
+{
+    vrSystem->waitAndFetchPoses();
+    float nearDistance = cameraState.nearDistance;
+    float farDistance = cameraState.farDistance;
+
+    size_t poseCount = vrSystem->getCurrentTrackedDevicePoseCount();
+    for(size_t i = 0; i < poseCount; ++i)
+    {
+        agpu_vr_tracked_device_pose trackedPose;
+        //agpu_vr_tracked_device_pose renderTrackedPose;
+        vrSystem->getCurrentTrackedDevicePoseInto(agpu_size(i), &trackedPose);
+        if(!trackedPose.is_valid)
+            continue;
+
+        if(trackedPose.device_class == AGPU_VR_TRACKED_DEVICE_CLASS_CONTROLLER)
+        {
+            auto modelMatrix = Matrix4x4::fromAgpu(trackedPose.device_to_absolute_tracking);
+            if(trackedPose.device_role == AGPU_VR_TRACKED_DEVICE_ROLE_LEFT_HAND)
+            {
+                auto & controller = handControllers[0];
+                controller.modelState.modelMatrix = cameraState.inverseViewMatrix*modelMatrix;
+                controller.modelState.inverseModelMatrix = modelMatrix.inverse();
+
+                if(!controller.modelStateBinding)
+                {
+                    agpu_buffer_description desc = {};
+                    desc.size = (sizeof(ModelState) + 255) & (-256);
+                    desc.heap_type = AGPU_MEMORY_HEAP_TYPE_HOST_TO_DEVICE;
+                    desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_UNIFORM_BUFFER);
+                    desc.main_usage_mode = AGPU_UNIFORM_BUFFER;
+                    desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
+                    controller.modelStateBuffer = device->createBuffer(&desc, nullptr);
+
+                    controller.modelStateBinding = shaderSignature->createShaderResourceBinding(4);
+                    controller.modelStateBinding->bindUniformBuffer(0, controller.modelStateBuffer);
+                }
+                controller.modelStateBuffer->uploadBufferData(0, sizeof(controller.modelState), &controller.modelState);
+
+                if(!controller.deviceModel)
+                {
+                    auto model = vrSystem->getTrackedDeviceRenderModel(agpu_size(i));
+                    if(model && model->texture)
+                    {
+                        controller.deviceModel = loadDeviceModel(model);
+                        auto texture = loadVRModelTexture(model->texture);
+                        controller.modelStateBinding->bindSampledTextureView(1, texture->getOrCreateFullView());
+                    }
+                }
+            }
+            else if(trackedPose.device_role == AGPU_VR_TRACKED_DEVICE_ROLE_RIGHT_HAND)
+            {
+                auto & controller = handControllers[1];
+                controller.modelState.modelMatrix = cameraState.inverseViewMatrix*modelMatrix;
+                controller.modelState.inverseModelMatrix = modelMatrix.inverse();
+
+                if(!controller.modelStateBinding)
+                {
+                    agpu_buffer_description desc = {};
+                    desc.size = (sizeof(ModelState) + 255) & (-256);
+                    desc.heap_type = AGPU_MEMORY_HEAP_TYPE_HOST_TO_DEVICE;
+                    desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_UNIFORM_BUFFER);
+                    desc.main_usage_mode = AGPU_UNIFORM_BUFFER;
+                    desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
+                    controller.modelStateBuffer = device->createBuffer(&desc, nullptr);
+
+                    controller.modelStateBinding = shaderSignature->createShaderResourceBinding(4);
+                    controller.modelStateBinding->bindUniformBuffer(0, controller.modelStateBuffer);
+                }
+                controller.modelStateBuffer->uploadBufferData(0, sizeof(controller.modelState), &controller.modelState);
+
+                if(!controller.deviceModel)
+                {
+                    auto model = vrSystem->getTrackedDeviceRenderModel(agpu_size(i));
+                    if(model && model->texture)
+                    {
+                        controller.deviceModel = loadDeviceModel(model);
+                        auto texture = loadVRModelTexture(model->texture);
+                        controller.modelStateBinding->bindSampledTextureView(1, texture->getOrCreateFullView());
+                    }
+                }
+            }
+        }
+        else if(trackedPose.device_class == AGPU_VR_TRACKED_DEVICE_CLASS_HMD)
+        {
+            auto headMatrix = Matrix4x4::fromAgpu(trackedPose.device_to_absolute_tracking);
+            hmdCameraState.viewMatrix = headMatrix.inverse()*cameraState.viewMatrix;
+            hmdCameraState.inverseViewMatrix = hmdCameraState.viewMatrix.inverse();
+        }
+    }
+
+    leftEyeCameraState = hmdCameraState;
+    rightEyeCameraState = hmdCameraState;
+
+    // Left eye
+    {
+        agpu_frustum_tangents tangents;
+        vrSystem->getProjectionFrustumTangents(AGPU_VR_EYE_LEFT, &tangents);
+        leftEyeCameraState.projectionMatrix = Matrix4x4::frustum(tangents.left*nearDistance, tangents.right*nearDistance, tangents.bottom*nearDistance, tangents.top*nearDistance, nearDistance, farDistance, device->hasTopLeftNdcOrigin());
+        leftEyeCameraState.inverseProjectionMatrix = leftEyeCameraState.projectionMatrix.inverse();
+
+        agpu_matrix4x4f eyeToHead;
+        vrSystem->getEyeToHeadTransform(AGPU_VR_EYE_LEFT, &eyeToHead);
+
+        auto eyeToHeadMatrix = Matrix4x4::fromAgpu(eyeToHead);
+        leftEyeCameraState.viewMatrix = eyeToHeadMatrix.inverse() * leftEyeCameraState.viewMatrix;
+        leftEyeCameraState.inverseViewMatrix = leftEyeCameraState.viewMatrix.inverse();
+    }
+
+    // right eye
+    {
+        agpu_frustum_tangents tangents;
+        vrSystem->getProjectionFrustumTangents(AGPU_VR_EYE_RIGHT, &tangents);
+        rightEyeCameraState.projectionMatrix = Matrix4x4::frustum(tangents.left*nearDistance, tangents.right*nearDistance, tangents.bottom*nearDistance, tangents.top*nearDistance, nearDistance, farDistance, device->hasTopLeftNdcOrigin());
+        rightEyeCameraState.inverseProjectionMatrix = rightEyeCameraState.projectionMatrix.inverse();
+
+        agpu_matrix4x4f eyeToHead;
+        vrSystem->getEyeToHeadTransform(AGPU_VR_EYE_RIGHT, &eyeToHead);
+
+        auto eyeToHeadMatrix = Matrix4x4::fromAgpu(eyeToHead);
+        rightEyeCameraState.viewMatrix = eyeToHeadMatrix.inverse() * rightEyeCameraState.viewMatrix;
+        rightEyeCameraState.inverseViewMatrix = rightEyeCameraState.viewMatrix.inverse();
+    }
+}
+
+void
+Molevis::emitRenderCommands()
+{    
     // Build the command list
     commandAllocator->reset();
     commandList->reset(commandAllocator, nullptr);
@@ -1684,6 +1739,9 @@ Molevis::updateAndRender(float delta)
     commandList->useComputeShaderResources(leftEyeScreenStateBinding);
     commandList->useComputeShaderResources(atomFrontBufferBinding);
     commandList->useComputeShaderResources(atomBoundQuadBufferBinding);
+    
+    PushConstants pushConstants = {};
+    pushConstants.highlighedAtom = currentHighlightedAtom;
     commandList->pushConstants(0, sizeof(pushConstants), &pushConstants);
 
     if(isStereo || isVirtualReality)

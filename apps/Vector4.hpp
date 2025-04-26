@@ -11,6 +11,8 @@ struct alignas(16) Vector4
     Vector4() = default;
     Vector4(float cx, float cy, float cz, float cw)
         : x(cx), y(cy), z(cz), w(cw) {}
+    Vector4(const Vector3 &v, float cw)
+            : x(v.x), y(v.y), z(v.z), w(cw) {}
     Vector4(float s)
         : x(s), y(s), z(s), w(s) {}
 
@@ -49,6 +51,11 @@ struct alignas(16) Vector4
         case 3: return Vector3{x, y, z};
         default: abort();
         }
+    }
+    
+    Vector3 xyz() const
+    {
+        return Vector3(x, y, z);
     }
 };
 

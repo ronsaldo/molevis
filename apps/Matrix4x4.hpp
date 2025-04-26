@@ -87,36 +87,20 @@ struct Matrix4x4
     {
         return Matrix4x4{{columns[0] - o.columns[0], columns[1] - o.columns[1], columns[2] - o.columns[2], columns[3] - o.columns[3]}};
     }
+    
+    Vector4 operator*(const Vector4 &v) const
+    {
+        return columns[0]*v.x + columns[1]*v.y + columns[2]*v.z + columns[3]*v.w;
+    }
 
     Matrix4x4 operator*(const Matrix4x4 &o) const
     {
-        Matrix4x4 s = transposed();
         return Matrix4x4{{
-            Vector4{
-                s.columns[0].dot(o.columns[0]),
-                s.columns[0].dot(o.columns[1]),
-                s.columns[0].dot(o.columns[2]),
-                s.columns[0].dot(o.columns[3]),
-            },
-            Vector4{
-                s.columns[1].dot(o.columns[0]),
-                s.columns[1].dot(o.columns[1]),
-                s.columns[1].dot(o.columns[2]),
-                s.columns[1].dot(o.columns[3]),
-            },
-            Vector4{
-                s.columns[2].dot(o.columns[0]),
-                s.columns[2].dot(o.columns[1]),
-                s.columns[2].dot(o.columns[2]),
-                s.columns[2].dot(o.columns[3]),
-            },
-            Vector4{
-                s.columns[3].dot(o.columns[0]),
-                s.columns[3].dot(o.columns[1]),
-                s.columns[3].dot(o.columns[2]),
-                s.columns[3].dot(o.columns[3]),
-            },
-        }}.transposed();
+            columns[0]*o.columns[0].x + columns[1]*o.columns[0].y + columns[2]*o.columns[0].z + columns[3]*o.columns[0].w,
+            columns[0]*o.columns[1].x + columns[1]*o.columns[1].y + columns[2]*o.columns[1].z + columns[3]*o.columns[1].w,
+            columns[0]*o.columns[2].x + columns[1]*o.columns[2].y + columns[2]*o.columns[2].z + columns[3]*o.columns[2].w,
+            columns[0]*o.columns[3].x + columns[1]*o.columns[3].y + columns[2]*o.columns[3].z + columns[3]*o.columns[3].w
+        }};
     }
 
     Matrix3x3 minorMatrixAt(int row, int column) const
