@@ -1,8 +1,9 @@
 #ifndef MOLLEVIS_VECTOR4_HPP
 #define MOLLEVIS_VECTOR4_HPP
 
-#include <math.h>
 #include "Vector3.hpp"
+#include <math.h>
+#include <stdlib.h>
 
 struct alignas(16) Vector4
 {

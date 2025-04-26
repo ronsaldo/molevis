@@ -6,6 +6,10 @@
 #include "AGPU/agpu.hpp"
 #include <stdlib.h>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 struct Matrix4x4
 {
     static Matrix4x4 fromAgpu(const agpu_matrix4x4f &am)
@@ -41,7 +45,7 @@ struct Matrix4x4
     static Matrix4x4 perspective(float fovy, float aspect, float nearDistanceDistance, float farDistanceDistance, bool flipVertically)
     {
         float fovyRad = float(fovy *0.5f * (M_PI / 180.0f));
-        float top = nearDistanceDistance * tan(fovyRad);
+        float top = float(nearDistanceDistance * tan(fovyRad));
         float right = top * aspect;
 
         return frustum(-right, right, -top, top, nearDistanceDistance, farDistanceDistance, flipVertically);

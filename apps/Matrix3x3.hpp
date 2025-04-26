@@ -26,8 +26,8 @@ struct Matrix3x3
 
     static Matrix3x3 XRotation(float angle)
     {
-        float c = cos(angle);
-        float s = sin(angle);
+        float c = float(cos(angle));
+        float s = float(sin(angle));
         return Matrix3x3{{
             {1, 0, 0},
             {0, c, s},
@@ -37,8 +37,8 @@ struct Matrix3x3
 
     static Matrix3x3 YRotation(float angle)
     {
-        float c = cos(angle);
-        float s = sin(angle);
+        float c = float(cos(angle));
+        float s = float(sin(angle));
         return Matrix3x3{{
             {c, 0, -s},
             {0, 1, 0},

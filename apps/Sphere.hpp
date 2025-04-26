@@ -15,10 +15,10 @@ struct Sphere
         // Ray sphere intersection formula from: https://viclw17.github.io/2018/07/16/raytracing-ray-sphere-intersection
         Vector3 rayOriginSphereCenter = ray.origin - center;
         float a = ray.direction.dot(ray.direction);
-        float b = 2.0 * ray.direction.dot(rayOriginSphereCenter);
+        float b = 2.0f * ray.direction.dot(rayOriginSphereCenter);
         float c = rayOriginSphereCenter.dot(rayOriginSphereCenter) - radius*radius;
-        float delta = b*b - 4.0*a*c;
-        if (delta < 0.0)
+        float delta = b*b - 4.0f*a*c;
+        if (delta < 0.0f)
             return false;
 
         float deltaSqrt = sqrt(delta);

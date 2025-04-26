@@ -1,5 +1,10 @@
 #include "Frustum.hpp"
 #include "Vector4.hpp"
+#include <math.h>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 void Frustum::makeOrtho(float left, float right, float bottom, float top, float nearDistance, float farDistance)
 {
@@ -33,8 +38,8 @@ void Frustum::makeFrustum(float left, float right, float bottom, float top, floa
 }
 void Frustum::makePerspective(float fovy, float aspect, float nearDistance, float farDistance)
 {
-    float fovyRad = fovy *0.5f * (M_PI / 180.0f);
-    float top = nearDistance * tan(fovyRad);
+    float fovyRad = float(fovy *0.5f * (M_PI / 180.0f));
+    float top = float(nearDistance * tan(fovyRad));
     float right = top * aspect;
 
     return makeFrustum(-right, right, -top, top, nearDistance, farDistance);
@@ -73,15 +78,15 @@ void Frustum::computeBoundingBox()
 Frustum Frustum::splitAtNearAndFarLambda(float nearLambda, float farLambda)
 {
     Frustum splitted;
-    splitted.leftBottomNear  = leftBottomNear*(1.0-nearLambda) + leftBottomFar*nearLambda;
-	splitted.rightBottomNear = rightBottomNear*(1.0-nearLambda) + rightBottomFar*nearLambda;
-	splitted.leftTopNear     = leftTopNear*(1.0-nearLambda) + leftTopFar*nearLambda;
-	splitted.rightTopNear    = rightTopNear*(1.0-nearLambda) + rightTopFar*nearLambda;
+    splitted.leftBottomNear  = leftBottomNear*(1.0f-nearLambda) + leftBottomFar*nearLambda;
+	splitted.rightBottomNear = rightBottomNear*(1.0f-nearLambda) + rightBottomFar*nearLambda;
+	splitted.leftTopNear     = leftTopNear*(1.0f-nearLambda) + leftTopFar*nearLambda;
+	splitted.rightTopNear    = rightTopNear*(1.0f-nearLambda) + rightTopFar*nearLambda;
 
-    splitted.leftBottomFar  = leftBottomNear*(1.0-farLambda) + leftBottomFar*farLambda;
-	splitted.rightBottomFar = rightBottomNear*(1.0-farLambda) + rightBottomFar*farLambda;
-	splitted.leftTopFar     = leftTopNear*(1.0-farLambda) + leftTopFar*farLambda;
-	splitted.rightTopFar    = rightTopNear*(1.0-farLambda) + rightTopFar*farLambda;
+    splitted.leftBottomFar  = leftBottomNear*(1.0f-farLambda) + leftBottomFar*farLambda;
+	splitted.rightBottomFar = rightBottomNear*(1.0f-farLambda) + rightBottomFar*farLambda;
+	splitted.leftTopFar     = leftTopNear*(1.0f-farLambda) + leftTopFar*farLambda;
+	splitted.rightTopFar    = rightTopNear*(1.0f-farLambda) + rightTopFar*farLambda;
     splitted.computeBoundingBox();
     splitted.computePlanes();
     return splitted;
