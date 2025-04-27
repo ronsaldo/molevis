@@ -163,7 +163,6 @@ struct TrackedHandController
 {
     ModelState modelState;
     TrackedDeviceModelPtr deviceModel;
-    TrackedDeviceModelPtr pointerModel;
 
     agpu_buffer_ref modelStateBuffer;
     agpu_texture_ref modelTexture;

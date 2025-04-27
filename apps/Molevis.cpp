@@ -13,7 +13,7 @@ agpu_vertex_attrib_description VRRenderModelVertexDesc[] = {
 const int VRRenderModelVertexDescSize = sizeof(VRRenderModelVertexDesc) / sizeof(VRRenderModelVertexDesc[0]);
 
 agpu_vertex_attrib_description VRPointerModelVertexDesc[] = {
-    {0, 0, AGPU_TEXTURE_FORMAT_R32G32B32_FLOAT, offsetof(agpu_vr_render_model_vertex, position), 0},
+    {0, 0, AGPU_TEXTURE_FORMAT_R32G32B32_FLOAT, 0, 0},
 };
 
 const int VRPointerModelVertexDescSize = sizeof(VRPointerModelVertexDesc) / sizeof(VRPointerModelVertexDesc[0]);
@@ -550,9 +550,9 @@ Molevis::mainStart(int argc, const char *argv[])
 
     // Pointer
     {
-        agpu_size vertexStride = sizeof(agpu_vr_render_model_vertex);
+        agpu_size vertexStride = sizeof(PackedVector3);
         pointerModelVertexLayout = device->createVertexLayout();
-        pointerModelVertexLayout->addVertexAttributeBindings(1, &vertexStride, VRRenderModelVertexDescSize, VRRenderModelVertexDesc);
+        pointerModelVertexLayout->addVertexAttributeBindings(1, &vertexStride, VRPointerModelVertexDescSize, VRPointerModelVertexDesc);
 
         auto pointerModelVertex = compileShaderWithCommonSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/pointerModelVertex.glsl", AGPU_VERTEX_SHADER);
         auto pointerModelFragment = compileShaderWithCommonSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/pointerModelFragment.glsl", AGPU_FRAGMENT_SHADER);
@@ -633,6 +633,7 @@ Molevis::mainStart(int argc, const char *argv[])
     uiElementVertex = compileShaderWithCommonSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/uiElementVertex.glsl", AGPU_VERTEX_SHADER);
     uiElementFragment = compileShaderWithSourceFile("assets/shaders/uiElementFragment.glsl", AGPU_FRAGMENT_SHADER);
 
+    createPointerModel();
     createIntermediateTexturesAndFramebuffer();
 
     if(!uiElementVertex || !uiElementFragment)
@@ -788,6 +789,117 @@ Molevis::createIntermediateTexturesAndFramebuffer()
     rightEyeScreenStateBinding->bindSampledTextureView(3, hdrTargetTextureView);
     rightEyeScreenStateBinding->bindSampledTextureView(4, leftEyeView);
     rightEyeScreenStateBinding->bindSampledTextureView(5, rightEyeView);
+}
+
+void
+Molevis::createPointerModel()
+{
+    AABox box;
+    box.min = Vector3(-0.01f, -0.01f, -1000.1f);
+    box.max = Vector3(0.01f, 0.01f, 0.01f);
+
+    auto minX = box.min.x;
+    auto minY = box.min.y;
+    auto minZ = box.min.z;
+    auto maxX = box.max.x;
+    auto maxY = box.max.y;
+    auto maxZ = box.max.z;
+
+    PackedVector3 vertices[] = {
+        // Left
+		{minX, minY, minZ},
+		{minX, maxY, minZ},
+		{minX, maxY, maxZ},
+		{minX, minY, maxZ},
+
+        // Right
+		{maxX, minY, minZ},
+		{maxX, maxY, minZ},
+		{maxX, maxY, maxZ},
+		{maxX, minY, maxZ},
+
+        // Top
+        {minX, maxY, minZ},
+		{maxX, maxY, minZ},
+		{maxX, maxY, maxZ},
+		{minX, maxY, maxZ},
+
+        // Bottom
+        {minX, minY, minZ},
+        {maxX, minY, minZ},
+        {maxX, minY, maxZ},
+        {minX, minY, maxZ},
+
+        // Back
+        {minX, minY, minZ},
+		{maxX, minY, minZ},
+		{maxX, maxY, minZ},
+		{minX, maxY, minZ},
+        
+        // Back
+        {minX, minY, maxZ},
+		{maxX, minY, maxZ},
+		{maxX, maxY, maxZ},
+		{minX, maxY, maxZ},
+    };
+    uint16_t indices[] = {
+        // Left
+		0 + 1, 0 + 0, 0 + 2,
+		0 + 3, 0 + 2, 0 + 0,
+
+        // Right
+		4 + 0, 4 + 1, 4 + 2,
+		4 + 2, 4 + 3, 4 + 0,
+
+        // Top
+		8 + 1, 8 + 0, 8 + 2,
+		8 + 3, 8 + 2, 8 + 0,
+
+        // Bottom
+		12 + 0, 12 + 1, 12 + 2,
+		12 + 2, 12 + 3, 12 + 0,
+
+        // Back
+        16 + 1, 16 + 0, 16 + 2,
+		16 + 3, 16 + 2, 16 + 0,
+
+        // Front
+        20 + 0, 20 + 1, 20 + 2,
+		20 + 2, 20 + 3, 20 + 0,
+    };
+
+    pointerModel = std::make_shared<TrackedDeviceModel> ();
+    auto vertexBufferSize = sizeof(vertices);
+    auto indexBufferSize = sizeof(indices);
+
+    {
+        agpu_buffer_description desc = {0};
+        desc.size = agpu_size(vertexBufferSize);
+        desc.heap_type = AGPU_MEMORY_HEAP_TYPE_DEVICE_LOCAL;
+        desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_ARRAY_BUFFER);
+        desc.main_usage_mode = AGPU_ARRAY_BUFFER;
+        desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
+
+        pointerModel->vertexBuffer = device->createBuffer(&desc, vertices);
+        pointerModel->vertexCount = sizeof(vertices) / sizeof(vertices[0]);
+    }
+    {
+        pointerModel->vertexBinding = device->createVertexBinding(pointerModelVertexLayout);
+        pointerModel->vertexBinding->bindVertexBuffers(1, &pointerModel->vertexBuffer);
+    }
+
+    {
+        agpu_buffer_description desc = {0};
+        desc.size = agpu_size(indexBufferSize);
+        desc.heap_type = AGPU_MEMORY_HEAP_TYPE_DEVICE_LOCAL;
+        desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_ELEMENT_ARRAY_BUFFER);
+        desc.main_usage_mode = AGPU_ELEMENT_ARRAY_BUFFER;
+        desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
+        desc.stride = 2;
+
+        pointerModel->indexBuffer = device->createBuffer(&desc, indices);
+        pointerModel->indexCount = sizeof(indices) / sizeof(indices[0]);
+    }
 }
 
 void
@@ -1705,9 +1817,9 @@ Molevis::updateVRState()
                         Vector3 origin = (cameraState.atomInverseModelMatrix * (controller.modelState.modelMatrix * Vector4(0, 0, 0, 1))).xyz();
                         Vector3 direction = (cameraState.atomInverseModelMatrix * (controller.modelState.modelMatrix * Vector4(0, 0, -1, 0))).xyz().normalized();
                         auto ray = Ray::withOriginAndDirection(origin, direction);
-                        printf("Left origin %f %f %f direction %f %f %f\n",
-                            origin.x, origin.y, origin.z,
-                            direction.x, direction.y, direction.z);
+                        //printf("Left origin %f %f %f direction %f %f %f\n",
+                        //    origin.x, origin.y, origin.z,
+                        //    direction.x, direction.y, direction.z);
                         findHighlightedAtom(ray);
                     }
                 }
@@ -1754,9 +1866,9 @@ Molevis::updateVRState()
                         Vector3 origin = (cameraState.atomInverseModelMatrix * (controller.modelState.modelMatrix * Vector4(0, 0, 0, 1))).xyz();
                         Vector3 direction = (cameraState.atomInverseModelMatrix * (controller.modelState.modelMatrix * Vector4(0, 0, -1, 0))).xyz().normalized();
                         auto ray = Ray::withOriginAndDirection(origin, direction);
-                        printf("Right origin %f %f %f direction %f %f %f\n",
-                            origin.x, origin.y, origin.z,
-                            direction.x, direction.y, direction.z);
+                        //printf("Right origin %f %f %f direction %f %f %f\n",
+                        //    origin.x, origin.y, origin.z,
+                        //    direction.x, direction.y, direction.z);
                         findHighlightedAtom(ray);
                     }
                 }
@@ -1942,11 +2054,10 @@ void Molevis::emitCommandsForEyeRendering(bool isRightEye)
 
         if(pointerModel && handController.triggerAxisState.x >= 0.5f)
         {
-            commandList->useShaderResources(handController.modelStateBinding);
             commandList->usePipelineState(pointerModelPipelineState);
-            commandList->useVertexBinding(handController.pointerModel->vertexBinding);
-            commandList->useIndexBuffer(handController.pointerModel->indexBuffer);
-            commandList->drawElements(agpu_uint(handController.pointerModel->indexCount), 1, 0, 0, 0);
+            commandList->useVertexBinding(pointerModel->vertexBinding);
+            commandList->useIndexBuffer(pointerModel->indexBuffer);
+            commandList->drawElements(agpu_uint(pointerModel->indexCount), 1, 0, 0, 0);
         }
     }
 
