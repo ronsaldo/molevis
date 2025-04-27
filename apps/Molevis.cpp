@@ -4,13 +4,19 @@
 #include "Sphere.hpp"
 #include "PushConstants.hpp"
 
-agpu_vertex_attrib_description RenderTargetModelVertexDesc[] = {
+agpu_vertex_attrib_description VRRenderModelVertexDesc[] = {
     {0, 0, AGPU_TEXTURE_FORMAT_R32G32B32_FLOAT, offsetof(agpu_vr_render_model_vertex, position), 0},
     {0, 1, AGPU_TEXTURE_FORMAT_R32G32B32_FLOAT, offsetof(agpu_vr_render_model_vertex, normal), 0},
     {0, 2, AGPU_TEXTURE_FORMAT_R32G32_FLOAT, offsetof(agpu_vr_render_model_vertex, texcoord), 0},
 };
 
-const int RenderTargetModelVertexDescSize = sizeof(RenderTargetModelVertexDesc) / sizeof(RenderTargetModelVertexDesc[0]);
+const int VRRenderModelVertexDescSize = sizeof(VRRenderModelVertexDesc) / sizeof(VRRenderModelVertexDesc[0]);
+
+agpu_vertex_attrib_description VRPointerModelVertexDesc[] = {
+    {0, 0, AGPU_TEXTURE_FORMAT_R32G32B32_FLOAT, offsetof(agpu_vr_render_model_vertex, position), 0},
+};
+
+const int VRPointerModelVertexDescSize = sizeof(VRPointerModelVertexDesc) / sizeof(VRPointerModelVertexDesc[0]);
 
 void
 TrackedHandController::convertState(const agpu_vr_controller_state &sourceState)
@@ -524,7 +530,7 @@ Molevis::mainStart(int argc, const char *argv[])
     {
         agpu_size vertexStride = sizeof(agpu_vr_render_model_vertex);
         modelVertexLayout = device->createVertexLayout();
-        modelVertexLayout->addVertexAttributeBindings(1, &vertexStride, RenderTargetModelVertexDescSize, RenderTargetModelVertexDesc);
+        modelVertexLayout->addVertexAttributeBindings(1, &vertexStride, VRRenderModelVertexDescSize, VRRenderModelVertexDesc);
 
         auto modelVertex = compileShaderWithCommonSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/modelVertex.glsl", AGPU_VERTEX_SHADER);
         auto modelFragment = compileShaderWithCommonSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/modelFragment.glsl", AGPU_FRAGMENT_SHADER);
@@ -540,6 +546,34 @@ Molevis::mainStart(int argc, const char *argv[])
         builder->setVertexLayout(modelVertexLayout);
         builder->setCullMode(AGPU_CULL_MODE_NONE);
         modelPipelineState = finishBuildingPipeline(builder);
+    }
+
+    // Pointer
+    {
+        agpu_size vertexStride = sizeof(agpu_vr_render_model_vertex);
+        pointerModelVertexLayout = device->createVertexLayout();
+        pointerModelVertexLayout->addVertexAttributeBindings(1, &vertexStride, VRRenderModelVertexDescSize, VRRenderModelVertexDesc);
+
+        auto pointerModelVertex = compileShaderWithCommonSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/pointerModelVertex.glsl", AGPU_VERTEX_SHADER);
+        auto pointerModelFragment = compileShaderWithCommonSourceFile("assets/shaders/shaderCommon.glsl", "assets/shaders/pointerModelFragment.glsl", AGPU_FRAGMENT_SHADER);
+
+        auto builder = device->createPipelineBuilder();
+        builder->setRenderTargetFormat(0, colorBufferFormat);
+        builder->setDepthStencilFormat(depthBufferFormat);
+        builder->setShaderSignature(shaderSignature);
+        builder->attachShader(pointerModelVertex);
+        builder->attachShader(pointerModelFragment);
+        builder->setPrimitiveType(AGPU_TRIANGLES);
+        builder->setDepthState(true, true, AGPU_GREATER_EQUAL);
+        builder->setVertexLayout(pointerModelVertexLayout);
+        builder->setCullMode(AGPU_CULL_MODE_NONE);
+        builder->setBlendFunction(-1,
+            AGPU_BLENDING_ONE, AGPU_BLENDING_INVERTED_SRC_ALPHA, AGPU_BLENDING_OPERATION_ADD,
+            AGPU_BLENDING_ONE, AGPU_BLENDING_INVERTED_SRC_ALPHA, AGPU_BLENDING_OPERATION_ADD
+        );
+        builder->setBlendState(-1, true);
+        builder->setPrimitiveType(AGPU_TRIANGLES);
+        pointerModelPipelineState = finishBuildingPipeline(builder);
     }
 
     // Tonemapping
@@ -1904,6 +1938,16 @@ void Molevis::emitCommandsForEyeRendering(bool isRightEye)
         commandList->useVertexBinding(handController.deviceModel->vertexBinding);
         commandList->useIndexBuffer(handController.deviceModel->indexBuffer);
         commandList->drawElements(agpu_uint(handController.deviceModel->indexCount), 1, 0, 0, 0);
+
+
+        if(pointerModel && handController.triggerAxisState.x >= 0.5f)
+        {
+            commandList->useShaderResources(handController.modelStateBinding);
+            commandList->usePipelineState(pointerModelPipelineState);
+            commandList->useVertexBinding(handController.pointerModel->vertexBinding);
+            commandList->useIndexBuffer(handController.pointerModel->indexBuffer);
+            commandList->drawElements(agpu_uint(handController.pointerModel->indexCount), 1, 0, 0, 0);
+        }
     }
 
     // Finish the hdr rendering

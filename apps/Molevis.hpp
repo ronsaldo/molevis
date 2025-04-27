@@ -163,6 +163,7 @@ struct TrackedHandController
 {
     ModelState modelState;
     TrackedDeviceModelPtr deviceModel;
+    TrackedDeviceModelPtr pointerModel;
 
     agpu_buffer_ref modelStateBuffer;
     agpu_texture_ref modelTexture;
@@ -186,6 +187,7 @@ public:
 
     int mainStart(int argc, const char *argv[]);
     void createIntermediateTexturesAndFramebuffer();
+    void createPointerModel();
 
     Random randColor;
     std::unordered_map<std::string, Vector4> atomTypeColorMap;
@@ -305,6 +307,10 @@ public:
     TrackedHandController handControllers[2];
     agpu_vertex_layout_ref modelVertexLayout;
     agpu_pipeline_state_ref modelPipelineState;
+
+    agpu_vertex_layout_ref pointerModelVertexLayout;
+    agpu_pipeline_state_ref pointerModelPipelineState;
+    TrackedDeviceModelPtr pointerModel;
 
     agpu_sampler_ref sampler;
     agpu_shader_resource_binding_ref samplersBinding;
