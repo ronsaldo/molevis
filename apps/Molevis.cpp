@@ -1716,11 +1716,12 @@ Molevis::updateAndRender(float delta)
     cameraWorldFrustum = cameraViewFrustum.transformedWith(cameraState.inverseViewMatrix);
     cameraAtomFrustum = cameraWorldFrustum.transformedWith(cameraState.atomInverseModelMatrix);
 
-    if(!hasLeftDragEvent && !hasRightDragEvent && !isVirtualReality)
+    if(!hasLeftDragEvent && !hasRightDragEvent && !isVirtualReality && atomDescriptions.size() <= 10000)
     {
         auto normalizedPosition = Vector2(float(mousePositionX) / float(displayWidth), 1.0f - float(mousePositionY) / float(displayHeight));
         //printf("np %f %f\n", normalizedPosition.x, normalizedPosition.y);
         Ray frustumRay = cameraAtomFrustum.rayForNormalizedPoint(normalizedPosition);
+
         findHighlightedAtom(frustumRay);
     }
 
