@@ -7,8 +7,6 @@
 struct AtomState
 {
     Vector3 position;
-    Vector3 velocity;
-    Vector3 netForce;
 };
 
 struct AtomSimulationState
@@ -21,8 +19,6 @@ struct AtomSimulationState
     {
         return AtomState{
             {float(position.x), float(position.y), float(position.z)},
-            {float(velocity.x), float(velocity.y), float(velocity.z)},
-            {float(netForce.x), float(netForce.y), float(netForce.z)},
         };
     }
 };
