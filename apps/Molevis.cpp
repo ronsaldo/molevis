@@ -702,7 +702,6 @@ Molevis::createIntermediateTexturesAndFramebuffer()
 
         framebufferDisplayWidth = vrDisplayWidth;
         framebufferDisplayHeight = vrDisplayHeight;
-        printf("Make intermediate %d %d\n", framebufferDisplayWidth, framebufferDisplayHeight);   
     }
     else
     {
@@ -1136,16 +1135,10 @@ Molevis::computeAtomsBoundingBox()
     }
 
     // Recompute the bounding
-    {
-        atomsBoundingBox = DAABox::empty();
-        for(auto &atom : simulationAtomState)
-            atomsBoundingBox.insertPoint(atom.position);
+    modelPosition = Vector3(0, 0, 0);
 
-        //modelPosition = Vector3(0.0, atomsBoundingBox.halfExtent().y*modelScaleFactor, 0.0);
-        modelPosition = Vector3(0, 0, 0);
-    }
-
-
+    computeSimulationBVH();
+    simulationBoundingVolumeHierarchy.swap(renderingVolumeHierarchy);
     for(size_t i = 0;i < simulationAtomState.size(); ++i)
         renderingAtomState[i] = simulationAtomState[i].asRenderingState();
 
@@ -1452,9 +1445,52 @@ Molevis::advanceLayoutRow()
 }
 
 void
+Molevis::computeSimulationBVH()
+{
+    atomsBoundingBox = DAABox::empty();
+    for(size_t i = 0; i < simulationAtomState.size(); ++i)
+    {
+        auto radius = atomDescriptions[i].radius;
+        auto &position = simulationAtomState[i].position;
+        atomsBoundingBox.insertBox(DAABox::withCenterAndHalfExtent(position, DVector3(radius, radius, radius)));
+    }
+
+    auto boundingBoxExtent = atomsBoundingBox.extent();
+    auto boundingBoxQuanta = boundingBoxExtent / (1<<15);
+
+    simulationBoundingVolumeHierarchy.nodes.clear();
+    simulationBoundingVolumeHierarchy.nodes.reserve(simulationAtomState.size()*2 + 1);
+
+    for(size_t i = 0; i < simulationAtomState.size(); ++i)
+    {
+        auto radius = atomDescriptions[i].radius;
+        auto &position = simulationAtomState[i].position;
+
+        auto quantizedPosition = (position - atomsBoundingBox.min) / boundingBoxQuanta;
+
+        DBVHNode node;
+        node.isLeaf = true;
+        node.boundingBox = DAABox::withCenterAndHalfExtent(position, DVector3(radius, radius, radius));
+
+        node.atomIndex = i;
+        node.quantizedCenterPosition = computeZOrder(quantizedPosition.x, quantizedPosition.y, quantizedPosition.z);
+        simulationBoundingVolumeHierarchy.nodes.push_back(node);
+    }
+
+    std::sort(simulationBoundingVolumeHierarchy.nodes.begin(), simulationBoundingVolumeHierarchy.nodes.end(), [](const DBVHNode &a, const DBVHNode &b){
+        return a.quantizedCenterPosition < b.quantizedCenterPosition;
+    });
+
+    simulationBoundingVolumeHierarchy.buildInnerNodes();
+}
+
+void
 Molevis::simulateIterationInCPU(double timestep)
 {
     assert(simulationAtomState.size() == renderingAtomState.size());
+    // Compute the BVH
+    computeSimulationBVH();
+
     // Reset the net force.
     for(size_t i = 0; i < simulationAtomState.size(); ++i)
         simulationAtomState[i].netForce = DVector3(0, 0, 0);
@@ -1574,6 +1610,7 @@ Molevis::simulateIterationInCPU(double timestep)
         for(size_t i = 0; i < simulationAtomState.size(); ++i)
             renderingAtomState[i] = simulationAtomState[i].asRenderingState();
         renderingAtomStateDirty = true;
+        renderingVolumeHierarchy.swap(simulationBoundingVolumeHierarchy);
     }
 
     simulationIteration.fetch_add(1);

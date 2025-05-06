@@ -15,6 +15,14 @@ struct DAABox
         };
     }
 
+    static DAABox withCenterAndHalfExtent(const DVector3 &center, const DVector3 &halfExtent)
+    {
+        return DAABox{
+            center - halfExtent,
+            center + halfExtent
+        };
+    }
+
     void insertPoint(const DVector3 &p)
     {
         min.x = std::min(min.x, p.x);
@@ -24,6 +32,24 @@ struct DAABox
         max.x = std::max(max.x, p.x);
         max.y = std::max(max.y, p.y);
         max.z = std::max(max.z, p.z);
+    }
+
+    void insertBox(const DAABox &b)
+    {
+        min.x = std::min(min.x, b.min.x);
+        min.y = std::min(min.y, b.min.y);
+        min.z = std::min(min.z, b.min.z);
+
+        max.x = std::max(max.x, b.max.x);
+        max.y = std::max(max.y, b.max.y);
+        max.z = std::max(max.z, b.max.z);
+    }
+
+    DAABox unionWith(const DAABox &o)
+    {
+        auto result = *this;
+        result.insertBox(o);
+        return result;
     }
 
     DVector3 halfExtent()
