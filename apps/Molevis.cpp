@@ -162,7 +162,7 @@ Molevis::mainStart(int argc, const char *argv[])
     SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
     SDL_Init(SDL_INIT_VIDEO);
 
-    window = SDL_CreateWindow("Mollevis", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, cameraState.screenWidth, cameraState.screenHeight, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    window = SDL_CreateWindow("Mollevis", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, cameraState.screenWidth, cameraState.screenHeight, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     if(!window)
     {
         fprintf(stderr, "Failed to create window.\n");
@@ -1718,7 +1718,7 @@ Molevis::updateAndRender(float delta)
 
     if(!hasLeftDragEvent && !hasRightDragEvent && !isVirtualReality && atomDescriptions.size() <= 10000)
     {
-        auto normalizedPosition = Vector2(float(mousePositionX) / float(displayWidth), 1.0f - float(mousePositionY) / float(displayHeight));
+        auto normalizedPosition = Vector2(float(mousePositionX) / float(cameraState.screenWidth), 1.0f - float(mousePositionY) / float(cameraState.screenHeight));
         //printf("np %f %f\n", normalizedPosition.x, normalizedPosition.y);
         Ray frustumRay = cameraAtomFrustum.rayForNormalizedPoint(normalizedPosition);
 
