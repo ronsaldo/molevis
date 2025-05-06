@@ -1507,10 +1507,10 @@ Molevis::simulateIterationInCPU(double timestep)
         double firstLennardJonesEpsilon = firstAtomDesc.lennardJonesEpsilon;
         double firstLennardJonesSigma   = firstAtomDesc.lennardJonesSigma;
 
-        for(size_t j = 0; j < simulationAtomState.size(); ++j)
-        {
+        DSphere firstAtomInfluenceSphere = {firstLennardJonesCutoff, firstPosition};
+        simulationBoundingVolumeHierarchy.atomsIntersectingSphereDo(firstAtomInfluenceSphere, [&](size_t j) {
             if(i == j)
-                continue;
+                return;
 
             auto &secondAtomDesc = atomDescriptions[j];
             auto &secondAtomState = simulationAtomState[j];
@@ -1521,7 +1521,7 @@ Molevis::simulateIterationInCPU(double timestep)
             double secondLennardJonesEpsilon = secondAtomDesc.lennardJonesEpsilon;
             double secondLennardJonesSigma   = secondAtomDesc.lennardJonesSigma;
 
-            double lennardJonesCutoff = firstLennardJonesCutoff + secondLennardJonesCutoff;
+            double lennardJonesCutoff = std::min(firstLennardJonesCutoff, secondLennardJonesCutoff);
             double lennardJonesEpsilon = sqrt(firstLennardJonesEpsilon*secondLennardJonesEpsilon);
             double lennardJonesSigma = (firstLennardJonesSigma + secondLennardJonesSigma) * 0.5;
 
@@ -1532,11 +1532,8 @@ Molevis::simulateIterationInCPU(double timestep)
                 auto normalizedDirection = direction / dist;
                 auto force = -normalizedDirection * lennardJonesDerivative(std::max(dist, 1.0), lennardJonesSigma, lennardJonesEpsilon);
                 firstAtomState.netForce = firstAtomState.netForce + force;
-
-                //if(i == 94 && j == 95)
-                //    printf("Dist %zu %zu: %f\n", i, j, dist);
             }
-        }
+        });
     }
 
     // Morse bond

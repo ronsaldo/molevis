@@ -26,12 +26,12 @@ struct AABox
         max.z = std::max(max.z, p.z);
     }
 
-    Vector3 halfExtent()
+    Vector3 halfExtent() const
     {
         return (max - min)*0.5;
     }
 
-    Vector3 center()
+    Vector3 center() const
     {
         return min + halfExtent();
     }

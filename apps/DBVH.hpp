@@ -2,6 +2,7 @@
 #define MOLEVIS_DBVH_HPP
 
 #include "DAABox.hpp"
+#include "DSphere.hpp"
 #include <vector>
 
 struct DBVHNode
@@ -28,6 +29,33 @@ struct DBVH
     void swap(DBVH &other)
     {
         nodes.swap(other.nodes);
+    }
+
+    template<typename FT>
+    void atomsIntersectingSphereDo(const DSphere &sphere, size_t nodeIndex, const FT &function)
+    {
+        const auto &node = nodes[nodeIndex];
+        if(!node.boundingBox.intersectsSphere(sphere))
+            return;
+
+        if(node.isLeaf)
+        {
+            function(nodeIndex);
+        }
+        else
+        {
+            atomsIntersectingSphereDo(sphere, node.leftChild, function);
+            atomsIntersectingSphereDo(sphere, node.rightChild, function);
+        }
+    }
+
+    template<typename FT>
+    void atomsIntersectingSphereDo(const DSphere &sphere, const FT &function)
+    {
+        if(nodes.empty())
+            return;
+
+        atomsIntersectingSphereDo(sphere, nodes.size() - 1, function);
     }
 
     void buildInnerNodes()

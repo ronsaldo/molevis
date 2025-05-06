@@ -37,6 +37,33 @@ struct alignas(32) DVector3
         return sqrt(x*x + y*y + z*z);
     }
 
+    DVector3 max(const DVector3 &o) const
+    {
+        return DVector3(
+            std::max(x, o.x),
+            std::max(x, o.y),
+            std::max(x, o.z)
+        );
+    }
+
+    DVector3 abs() const
+    {
+        return max(-*this);
+    }
+
+    DVector3 normalized() const
+    {
+        auto l = length();
+        if(l < 1e-6)
+            return DVector3(0);
+        return DVector3(x / l, y/ l, z / l);
+    }
+
+    DVector3 reciprocal() const
+    {
+        return DVector3(1.0f/x, 1.0f/y, 1.0f/z);
+    }
+
     DVector3 operator-() const
     {
         return DVector3{-x, -y, -z};

@@ -2,6 +2,7 @@
 #define MOLLEVIS_DAABOX_HPP
 
 #include "DVector3.hpp"
+#include "DSphere.hpp"
 #include <math.h>
 #include <algorithm>
 
@@ -45,26 +46,36 @@ struct DAABox
         max.z = std::max(max.z, b.max.z);
     }
 
-    DAABox unionWith(const DAABox &o)
+    DAABox unionWith(const DAABox &o) const
     {
         auto result = *this;
         result.insertBox(o);
         return result;
     }
 
-    DVector3 halfExtent()
+    DVector3 halfExtent() const
     {
         return (max - min)*0.5;
     }
 
-    DVector3 extent()
+    DVector3 extent() const
     {
         return max - min;
     }
 
-    DVector3 center()
+    DVector3 center() const
     {
         return min + halfExtent();
+    }
+
+    double distanceSquaredForPoint(const DVector3 &point) const
+    {
+        return ((point - center()).abs() - halfExtent()).max(DVector3(0, 0, 0)).length2();
+    }
+
+    bool intersectsSphere(const DSphere &sphere) const
+    {
+        return distanceSquaredForPoint(sphere.center) <= sphere.radius*sphere.radius;
     }
 
     DVector3 min, max;
