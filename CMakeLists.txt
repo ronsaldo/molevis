@@ -1,6 +1,6 @@
 # AbstractGPU cmake build script.
 cmake_minimum_required(VERSION 3.5)
-project(Mollevis)
+project(Mollevis C CXX CUDA)
 
 # Turn warnings
 if (MSVC)

@@ -3,6 +3,7 @@
 #include "Molevis.hpp"
 #include "Sphere.hpp"
 #include "PushConstants.hpp"
+#include "cuda_runtime_api.h"
 
 agpu_vertex_attrib_description VRRenderModelVertexDesc[] = {
     {0, 0, AGPU_TEXTURE_FORMAT_R32G32B32_FLOAT, offsetof(agpu_vr_render_model_vertex, position), 0},
@@ -114,6 +115,10 @@ Molevis::mainStart(int argc, const char *argv[])
             {
                 isVirtualReality = true;
                 vsyncDisabled = true;
+            }
+            else if (arg == "-use-cuda")
+            {
+                useCUDA = true;
             }
             
         }
@@ -1452,6 +1457,11 @@ Molevis::advanceLayoutRow()
 }
 
 void
+Molevis::simulateIterationWithCuda(double timestep)
+{
+}
+
+void
 Molevis::simulateIterationInCPU(double timestep)
 {
     assert(simulationAtomState.size() == renderingAtomState.size());
@@ -1596,7 +1606,12 @@ Molevis::simulationThreadEntry()
         }
 
         if(shouldStepSimulation)
-            simulateIterationInCPU(SimulationTimeStep);
+        {
+            if(useCUDA)
+                simulateIterationWithCuda(SimulationTimeStep);
+            else
+                simulateIterationInCPU(SimulationTimeStep);
+        }
     }
 
 }

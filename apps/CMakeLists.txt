@@ -1,5 +1,6 @@
 set(Molevis_Sources
     Frustum.cpp
+    Simulation.cu
     Molevis.cpp
 )
 

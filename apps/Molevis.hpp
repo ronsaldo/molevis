@@ -19,6 +19,7 @@
 #include "Vector3.hpp"
 #include "Vector4.hpp"
 #include "Matrix4x4.hpp"
+#include "Simulation.hpp"
 #include "Frustum.hpp"
 #include <chemfiles.hpp>
 #include <stdint.h>
@@ -48,52 +49,6 @@ inline int64_t getMicroseconds()
 }
 
 #endif
-
-// Units simulationTimeStep
-const double SimulationTimeStep = 1e-3f; // Picoseconds
-const double BoltzmannConstantSI = 1.380649e-23; // m^2.K^-1
-const double TargetTemperature = 10; // Kelvin
-
-inline double
-lennardJonesPotential(double r, double sigma, double epsilon)
-{
-    return 4*epsilon*(pow(sigma/r, 12) - pow(sigma/r, 6));
-}
-
-inline double
-lennardJonesDerivative(double r, double sigma, double epsilon)
-{
-    return 24*epsilon*(pow(sigma, 6)/pow(r, 7) - 2.0*pow(sigma, 12)/pow(r, 13));
-}
-
-inline double
-morsePotential(double r, double De, double a, double re)
-{
-    double interior = (1 - exp(-a*(r - re)));
-    return De*interior*interior;
-}
-
-inline double
-morsePotentialDerivative(double r, double De, double a, double re)
-{
-    double innerExp = exp(-a*(r - re));
-    return -2.0*a*De*(1.0 - innerExp)*innerExp;
-}
-
-inline double
-hookPotential(double distance, double equilibriumDistance, double k)
-{
-    double delta = distance - equilibriumDistance;
-    return 0.5*k * (delta*delta);
-}
-
-inline double
-hookPotentialDerivative(double distance, double equilibriumDistance, double k)
-{
-    double delta = distance - equilibriumDistance;
-    return k * delta;
-}
-
 
 struct UIElementQuad
 {
@@ -240,6 +195,7 @@ public:
     void beginLayout(float x = 5, float y = 5);
     void advanceLayoutRow();
 
+    void simulateIterationWithCuda(double timestep);
     void simulateIterationInCPU(double timestep);
     void simulationThreadEntry();
     void startSimulationThread();
@@ -386,6 +342,7 @@ public:
 
     std::atomic_bool isSimulating = true;
     std::atomic_int simulationIteration = 0;
+    bool useCUDA = false;
 
     bool hasWheelEvent = false;
     bool hasHandledWheelEvent = false;
