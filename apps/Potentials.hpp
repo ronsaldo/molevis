@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "cuda_runtime_api.h"
 
 // Units simulationTimeStep
 const double SimulationTimeStep = 1e-3f; // Picoseconds
