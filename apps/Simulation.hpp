@@ -8,9 +8,9 @@
 #include "cuda_runtime_api.h"
 
 void performCudaSimulationStep(
-    size_t atomDescriptionCount, AtomDescription *deviceAtomDescriptions,
-    size_t atomBondDescriptionCount, AtomBondDescription *atomBondDescriptions,
-    size_t atomStateSize, AtomSimulationState *atomStates
+    int atomDescriptionCount, AtomDescription *deviceAtomDescriptions,
+    int atomBondDescriptionCount, AtomBondDescription *atomBondDescriptions,
+    int atomStateSize, AtomSimulationState *atomStates
 );
 
 #endif //SIMULATION_HPP

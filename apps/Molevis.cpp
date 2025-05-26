@@ -1488,6 +1488,7 @@ Molevis::simulateIterationWithCuda(double timestep)
 
     // Readback result.
     cudaMemcpy(simulationAtomState.data(), cudaSimulationAtomState, simulationStateBufferSize, cudaMemcpyDeviceToHost);
+    cudaDeviceSynchronize();
 
     // Upload the new state
     {
