@@ -1544,7 +1544,7 @@ Molevis::simulateIterationInCPU(double timestep)
             if(1e-6 < dist && dist < lennardJonesCutoff)
             {
                 auto normalizedDirection = direction / dist;
-                auto force = -normalizedDirection * lennardJonesDerivative(std::max(dist, 1.0), lennardJonesSigma, lennardJonesEpsilon);
+                auto force = -normalizedDirection * lennardJonesDerivative(dist, lennardJonesSigma, lennardJonesEpsilon);
                 firstAtomState.netForce = firstAtomState.netForce + force;
 
                 //if(i == 94 && j == 95)

@@ -16,7 +16,7 @@ lennardJonesPotential(double r, double sigma, double epsilon)
     return 4*epsilon*(pow(sigma/r, 12) - pow(sigma/r, 6));
 }
 
-inline double
+inline __host__ __device__ double
 lennardJonesDerivative(double r, double sigma, double epsilon)
 {
     return 24*epsilon*(pow(sigma, 6)/pow(r, 7) - 2.0*pow(sigma, 12)/pow(r, 13));
