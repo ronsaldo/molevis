@@ -33,6 +33,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <thread>
+#include "cuda_runtime_api.h"
 
 #ifdef _WIN32
 inline int64_t getMicroseconds()
