@@ -33,7 +33,6 @@
 #include <mutex>
 #include <condition_variable>
 #include <thread>
-#include "cuda_runtime_api.h"
 
 #ifdef _WIN32
 inline int64_t getMicroseconds()
@@ -296,6 +295,10 @@ public:
     std::vector<AtomDescription> atomDescriptions; 
     std::vector<AtomBondDescription> atomBondDescriptions; 
     std::vector<AtomSimulationState> simulationAtomState;
+
+    AtomDescription *cudaAtomDescriptions = nullptr;
+    AtomBondDescription *cudaAtomBondDescriptions = nullptr;
+    AtomSimulationState *cudaSimulationAtomState = nullptr;
 
     std::mutex renderingAtomStateMutex;
     std::vector<AtomState> renderingAtomState;

@@ -1457,7 +1457,47 @@ Molevis::advanceLayoutRow()
 
 void
 Molevis::simulateIterationWithCuda(double timestep)
-{
+{  
+    if (!cudaAtomDescriptions)
+    {
+        size_t bufferSize = atomDescriptions.size()*sizeof(AtomDescription);
+        cudaMalloc((void**)&cudaAtomDescriptions, bufferSize);
+        cudaMemcpy(cudaAtomDescriptions, atomDescriptions.data(), bufferSize, cudaMemcpyHostToDevice);
+    }
+
+    if (!cudaAtomBondDescriptions)
+    {
+        size_t bufferSize = atomBondDescriptions.size()*sizeof(AtomBondDescription);
+        cudaMalloc((void**)&cudaAtomBondDescriptions, bufferSize);
+        cudaMemcpy(cudaAtomBondDescriptions, atomDescriptions.data(), bufferSize, cudaMemcpyHostToDevice);
+    }
+
+    size_t simulationStateBufferSize = simulationAtomState.size()*sizeof(AtomSimulationState);
+    if (!cudaSimulationAtomState)
+    {
+        cudaMalloc((void**)&cudaSimulationAtomState, simulationStateBufferSize);
+        cudaMemcpy(cudaSimulationAtomState, simulationAtomState.data(), simulationStateBufferSize, cudaMemcpyHostToDevice);
+    }
+
+    // Simulation step.
+    performCudaSimulationStep(
+        atomDescriptions.size(), cudaAtomDescriptions,
+        atomBondDescriptions.size(), cudaAtomBondDescriptions,
+        simulationAtomState.size(), cudaSimulationAtomState
+    );
+
+    // Readback result.
+    cudaMemcpy(simulationAtomState.data(), cudaSimulationAtomState, simulationStateBufferSize, cudaMemcpyDeviceToHost);
+
+    // Upload the new state
+    {
+        std::unique_lock l(renderingAtomStateMutex);
+        for(size_t i = 0; i < simulationAtomState.size(); ++i)
+            renderingAtomState[i] = simulationAtomState[i].asRenderingState();
+        renderingAtomStateDirty = true;
+    }
+
+    simulationIteration.fetch_add(1);
 }
 
 void
