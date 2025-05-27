@@ -1469,7 +1469,7 @@ Molevis::simulateIterationWithCuda(double timestep)
     {
         size_t bufferSize = atomBondDescriptions.size()*sizeof(AtomBondDescription);
         cudaMalloc((void**)&cudaAtomBondDescriptions, bufferSize);
-        cudaMemcpy(cudaAtomBondDescriptions, atomDescriptions.data(), bufferSize, cudaMemcpyHostToDevice);
+        cudaMemcpy(cudaAtomBondDescriptions, atomBondDescriptions.data(), bufferSize, cudaMemcpyHostToDevice);
     }
 
     size_t simulationStateBufferSize = simulationAtomState.size()*sizeof(AtomSimulationState);
@@ -1488,7 +1488,12 @@ Molevis::simulateIterationWithCuda(double timestep)
 
     // Readback result.
     cudaMemcpy(simulationAtomState.data(), cudaSimulationAtomState, simulationStateBufferSize, cudaMemcpyDeviceToHost);
-    cudaDeviceSynchronize();
+    auto cudaError = cudaDeviceSynchronize();
+    if(cudaError)
+    {
+        fprintf(stderr, "Cuda error: %d\n", cudaError);
+        return;
+    }
 
     // Upload the new state
     {

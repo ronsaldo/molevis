@@ -129,8 +129,8 @@ void computeBondForce(int bondCount, AtomBondDescription *atomBondDescriptions, 
     for(int i = index; i < bondCount; i += stride)
     {
         AtomBondDescription &bond = atomBondDescriptions[i];
-        auto &firstAtomState = atomStates[bond.firstAtomIndex];
-        auto &secondAtomState = atomStates[bond.secondAtomIndex];
+        AtomSimulationState &firstAtomState = atomStates[bond.firstAtomIndex];
+        AtomSimulationState &secondAtomState = atomStates[bond.secondAtomIndex];
 
         double3 direction = make_double3(
             firstAtomState.position.x - secondAtomState.position.x,
@@ -150,10 +150,14 @@ void computeBondForce(int bondCount, AtomBondDescription *atomBondDescriptions, 
             -normalizedDirection.y*hookPotentialDer,
             -normalizedDirection.z*hookPotentialDer
         );
-        double3 negatedForce = make_double3(-force.x, -force.y, -force.z);
 
-        //firstAtomState.netForce = firstAtomState.netForce + force;
-        //secondAtomState.netForce = secondAtomState.netForce - force;
+        atomicAdd(&firstAtomState.netForce.x, force.x);
+        atomicAdd(&firstAtomState.netForce.y, force.y);
+        atomicAdd(&firstAtomState.netForce.z, force.z);
+
+        atomicAdd(&secondAtomState.netForce.x, -force.x);
+        atomicAdd(&secondAtomState.netForce.y, -force.y);
+        atomicAdd(&secondAtomState.netForce.z, -force.z);
     }
 }
 
@@ -169,7 +173,7 @@ void performCudaSimulationStep(
     int blockCount = (atomStateSize + blockSize - 1) / blockSize; 
 
     int bondBlockSize = 256;    
-    int bondBlockCount = (atomBondDescriptionCount + blockSize - 1) / blockSize; 
+    int bondBlockCount = (atomBondDescriptionCount + bondBlockSize - 1) / bondBlockSize; 
 
     // Reset the net forces
     resetNetForces<<<blockCount, blockSize>>> (atomStateSize, atomStates);

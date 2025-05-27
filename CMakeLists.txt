@@ -1,5 +1,10 @@
 # AbstractGPU cmake build script.
 cmake_minimum_required(VERSION 3.5)
+
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+  set(CMAKE_CUDA_ARCHITECTURES 75)
+endif()
+
 project(Mollevis C CXX CUDA)
 
 # Turn warnings
