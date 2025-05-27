@@ -43,7 +43,7 @@ hookPotential(double distance, double equilibriumDistance, double k)
     return 0.5*k * (delta*delta);
 }
 
-inline double
+inline __host__ __device__ double
 hookPotentialDerivative(double distance, double equilibriumDistance, double k)
 {
     double delta = distance - equilibriumDistance;

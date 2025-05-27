@@ -16,20 +16,22 @@ void resetNetForces(int atomCount, AtomSimulationState *atomStates)
 }
 
 __global__
-void integrateNetForces(int atomCount, AtomSimulationState *atomStates, double timeStep)
+void integrateNetForces(int atomCount, AtomDescription *atomDescriptions, AtomSimulationState *atomStates, double timeStep)
 {
     int index = blockIdx.x*blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
 
     for(int i = index; i < atomCount; i += stride)
     {
+        double mass = atomDescriptions[i].mass;
         double3 netForce = make_double3(atomStates[i].netForce.x, atomStates[i].netForce.y, atomStates[i].netForce.z);
         double3 startVelocity = make_double3(atomStates[i].velocity.x, atomStates[i].velocity.y, atomStates[i].velocity.z);
         
+        double3 acceleration = make_double3(netForce.x/mass, netForce.y/mass, netForce.z/mass);
         double3 velocity = make_double3(
-            startVelocity.x + netForce.x*timeStep,
-            startVelocity.y + netForce.y*timeStep,
-            startVelocity.z + netForce.z*timeStep
+            startVelocity.x + acceleration.x*timeStep,
+            startVelocity.y + acceleration.y*timeStep,
+            startVelocity.z + acceleration.z*timeStep
         );
         atomStates[i].velocity.x = velocity.x;
         atomStates[i].velocity.y = velocity.y;
@@ -118,8 +120,45 @@ void computeLennardJonesForce(int atomCount, AtomDescription *atomDescriptions, 
     }
 }
 
+__global__
+void computeBondForce(int bondCount, AtomBondDescription *atomBondDescriptions, AtomSimulationState *atomStates)
+{
+    int index = blockIdx.x*blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
+
+    for(int i = index; i < bondCount; i += stride)
+    {
+        AtomBondDescription &bond = atomBondDescriptions[i];
+        auto &firstAtomState = atomStates[bond.firstAtomIndex];
+        auto &secondAtomState = atomStates[bond.secondAtomIndex];
+
+        double3 direction = make_double3(
+            firstAtomState.position.x - secondAtomState.position.x,
+            firstAtomState.position.y - secondAtomState.position.y,
+            firstAtomState.position.z - secondAtomState.position.z
+        );
+        double distance = sqrt(direction.x*direction.x + direction.y*direction.y + direction.z*direction.z);
+        double3 normalizedDirection = make_double3(
+            direction.x / distance,
+            direction.y / distance,
+            direction.z / distance
+        );
+
+        double hookPotentialDer = hookPotentialDerivative(distance, bond.equilibriumDistance, 100.0);
+        double3 force = make_double3(
+            -normalizedDirection.x*hookPotentialDer,
+            -normalizedDirection.y*hookPotentialDer,
+            -normalizedDirection.z*hookPotentialDer
+        );
+        double3 negatedForce = make_double3(-force.x, -force.y, -force.z);
+
+        //firstAtomState.netForce = firstAtomState.netForce + force;
+        //secondAtomState.netForce = secondAtomState.netForce - force;
+    }
+}
+
 void performCudaSimulationStep(
-    int atomDescriptionCount, AtomDescription *deviceAtomDescriptions,
+    int atomDescriptionCount, AtomDescription *atomDescriptions,
     int atomBondDescriptionCount, AtomBondDescription *atomBondDescriptions,
     int atomStateSize, AtomSimulationState *atomStates
 )
@@ -129,12 +168,18 @@ void performCudaSimulationStep(
     int blockSize = 256;    
     int blockCount = (atomStateSize + blockSize - 1) / blockSize; 
 
+    int bondBlockSize = 256;    
+    int bondBlockCount = (atomBondDescriptionCount + blockSize - 1) / blockSize; 
+
     // Reset the net forces
     resetNetForces<<<blockCount, blockSize>>> (atomStateSize, atomStates);
 
-    // Reset the net forces
-    computeLennardJonesForce<<<blockCount, blockSize>>> (atomStateSize, deviceAtomDescriptions, atomStates);
+    // Compute the lennard jones potential force.
+    computeLennardJonesForce<<<blockCount, blockSize>>> (atomStateSize, atomDescriptions, atomStates);
+
+    // Compute the bond forces.
+    computeBondForce<<<bondBlockCount, bondBlockSize>>> (atomBondDescriptionCount, atomBondDescriptions, atomStates);
 
     // Integrate forces
-    integrateNetForces<<<blockCount, blockSize>>> (atomStateSize, atomStates, SimulationTimeStep);
+    integrateNetForces<<<blockCount, blockSize>>> (atomStateSize, atomDescriptions, atomStates, SimulationTimeStep);
 }
