@@ -182,15 +182,41 @@ void computeKineticEnergy(int atomCount, AtomDescription *atomDescriptions, Atom
 
     for(int i = index; i < atomCount; i += stride)
     {
-        AtomDescription &firstAtomDesc = atomDescriptions[i];
-        AtomSimulationState &firstAtomState = atomStates[i];
+        AtomDescription &atomDesc = atomDescriptions[i];
+        AtomSimulationState &atomState = atomStates[i];
 
-        double kineticEnergy = 0.5*firstAtomDesc.mass * (
-            firstAtomState.velocity.x*firstAtomState.velocity.x +
-            firstAtomState.velocity.y*firstAtomState.velocity.y +
-            firstAtomState.velocity.z*firstAtomState.velocity.z
+        double kineticEnergy = 0.5*atomDesc.mass * (
+            atomState.velocity.x*atomState.velocity.x +
+            atomState.velocity.y*atomState.velocity.y +
+            atomState.velocity.z*atomState.velocity.z
         );
-        kineticEnergies[i] = kineticEnergy;
+        kineticEnergies[i] = kineticEnergy / atomCount;
+    }
+}
+
+__global__
+void kineticEnergySum(int atomCount, double *kineticEnergies)
+{
+    double sum = 0.0;
+    for(int i = 0; i < atomCount; ++i)
+        sum += kineticEnergies[i];
+    kineticEnergies[0] = sum;
+}
+
+__global__
+void scaleVelocities(int atomCount, AtomSimulationState *atomStates, double *kineticEnergies, double targetKineticEnergy)
+{
+    double kineticEnergyLambda = targetKineticEnergy / max(0.01, kineticEnergies[0]);
+
+    int index = blockIdx.x*blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
+
+    for(int i = index; i < atomCount; i += stride)
+    {
+        AtomSimulationState &atomState = atomStates[i];
+        atomState.velocity.x *= kineticEnergyLambda;
+        atomState.velocity.y *= kineticEnergyLambda;
+        atomState.velocity.z *= kineticEnergyLambda;
     }
 }
 
@@ -223,6 +249,12 @@ void performCudaSimulationStep(
 
     // Compute kinetic energy
     computeKineticEnergy<<<blockCount, blockSize>>> (atomStateSize, atomDescriptions, atomStates, kineticEnergyFrontBuffer);
+
+    // TODO: Use a parallel reduction.
+    kineticEnergySum<<<atomStateSize, 1>>> (atomStateSize, kineticEnergyFrontBuffer);
+
+    // Scale the velocities
+    scaleVelocities<<<blockCount, blockSize>>> (atomStateSize, atomStates, kineticEnergyFrontBuffer, 1.0);
 
     // Integrate velocities
     integrateVelocities<<<blockCount, blockSize>>> (atomStateSize, atomDescriptions, atomStates, SimulationTimeStep);
