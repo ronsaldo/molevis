@@ -36,6 +36,19 @@ void integrateNetForces(int atomCount, AtomDescription *atomDescriptions, AtomSi
         atomStates[i].velocity.x = velocity.x;
         atomStates[i].velocity.y = velocity.y;
         atomStates[i].velocity.z = velocity.z;
+    }
+}
+
+__global__
+void integrateVelocities(int atomCount, AtomDescription *atomDescriptions, AtomSimulationState *atomStates, double timeStep)
+{
+    int index = blockIdx.x*blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
+
+    for(int i = index; i < atomCount; i += stride)
+    {
+        double mass = atomDescriptions[i].mass;
+        double3 velocity = make_double3(atomStates[i].velocity.x, atomStates[i].velocity.y, atomStates[i].velocity.z);
 
         double3 startPosition = make_double3(atomStates[i].position.x, atomStates[i].position.y, atomStates[i].position.z);
         double3 position = make_double3(
@@ -186,4 +199,7 @@ void performCudaSimulationStep(
 
     // Integrate forces
     integrateNetForces<<<blockCount, blockSize>>> (atomStateSize, atomDescriptions, atomStates, SimulationTimeStep);
+
+    // Integrate velocities
+    integrateVelocities<<<blockCount, blockSize>>> (atomStateSize, atomDescriptions, atomStates, SimulationTimeStep);
 }
