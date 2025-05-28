@@ -10,7 +10,8 @@
 void performCudaSimulationStep(
     int atomDescriptionCount, AtomDescription *deviceAtomDescriptions,
     int atomBondDescriptionCount, AtomBondDescription *atomBondDescriptions,
-    int atomStateSize, AtomSimulationState *atomStates
+    int atomStateSize, AtomSimulationState *atomStates,
+    double *kineticEnergyFrontBuffer, double *kineticEnergyBackBuffer
 );
 
 #endif //SIMULATION_HPP

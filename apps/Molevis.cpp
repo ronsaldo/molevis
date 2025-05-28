@@ -1479,11 +1479,19 @@ Molevis::simulateIterationWithCuda(double timestep)
         cudaMemcpy(cudaSimulationAtomState, simulationAtomState.data(), simulationStateBufferSize, cudaMemcpyHostToDevice);
     }
 
+    if(!cudaKineticEnergyFrontBuffer)
+    {
+        size_t bufferSize = simulationAtomState.size()*sizeof(double);
+        cudaMalloc((void**)&cudaKineticEnergyFrontBuffer, bufferSize);
+        cudaMalloc((void**)&cudaKineticEnergyBackBuffer, bufferSize);
+    }
+
     // Simulation step.
     performCudaSimulationStep(
         atomDescriptions.size(), cudaAtomDescriptions,
         atomBondDescriptions.size(), cudaAtomBondDescriptions,
-        simulationAtomState.size(), cudaSimulationAtomState
+        simulationAtomState.size(), cudaSimulationAtomState,
+        cudaKineticEnergyFrontBuffer, cudaKineticEnergyBackBuffer
     );
 
     // Readback result.

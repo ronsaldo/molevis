@@ -300,6 +300,9 @@ public:
     AtomBondDescription *cudaAtomBondDescriptions = nullptr;
     AtomSimulationState *cudaSimulationAtomState = nullptr;
 
+    double *cudaKineticEnergyFrontBuffer = nullptr;
+    double *cudaKineticEnergyBackBuffer = nullptr;
+
     std::mutex renderingAtomStateMutex;
     std::vector<AtomState> renderingAtomState;
     bool renderingAtomStateDirty = true;

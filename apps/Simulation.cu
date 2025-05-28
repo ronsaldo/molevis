@@ -174,10 +174,31 @@ void computeBondForce(int bondCount, AtomBondDescription *atomBondDescriptions, 
     }
 }
 
+__global__
+void computeKineticEnergy(int atomCount, AtomDescription *atomDescriptions, AtomSimulationState *atomStates, double *kineticEnergies)
+{
+    int index = blockIdx.x*blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
+
+    for(int i = index; i < atomCount; i += stride)
+    {
+        AtomDescription &firstAtomDesc = atomDescriptions[i];
+        AtomSimulationState &firstAtomState = atomStates[i];
+
+        double kineticEnergy = 0.5*firstAtomDesc.mass * (
+            firstAtomState.velocity.x*firstAtomState.velocity.x +
+            firstAtomState.velocity.y*firstAtomState.velocity.y +
+            firstAtomState.velocity.z*firstAtomState.velocity.z
+        );
+        kineticEnergies[i] = kineticEnergy;
+    }
+}
+
 void performCudaSimulationStep(
     int atomDescriptionCount, AtomDescription *atomDescriptions,
     int atomBondDescriptionCount, AtomBondDescription *atomBondDescriptions,
-    int atomStateSize, AtomSimulationState *atomStates
+    int atomStateSize, AtomSimulationState *atomStates,
+    double *kineticEnergyFrontBuffer, double *kineticEnergyBackBuffer
 )
 {
     assert(atomDescriptionCount == atomStateSize);
@@ -199,6 +220,9 @@ void performCudaSimulationStep(
 
     // Integrate forces
     integrateNetForces<<<blockCount, blockSize>>> (atomStateSize, atomDescriptions, atomStates, SimulationTimeStep);
+
+    // Compute kinetic energy
+    computeKineticEnergy<<<blockCount, blockSize>>> (atomStateSize, atomDescriptions, atomStates, kineticEnergyFrontBuffer);
 
     // Integrate velocities
     integrateVelocities<<<blockCount, blockSize>>> (atomStateSize, atomDescriptions, atomStates, SimulationTimeStep);
