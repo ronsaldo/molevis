@@ -1660,10 +1660,14 @@ Molevis::simulationThreadEntry()
 
         if(shouldStepSimulation)
         {
+            auto iterationStartTime = getMicroseconds();
             if(useCUDA)
                 simulateIterationWithCuda(SimulationTimeStep);
             else
                 simulateIterationInCPU(SimulationTimeStep);
+            auto iterationEndTime = getMicroseconds();
+            auto iterationTime = iterationEndTime - iterationStartTime;
+            simulationTime.fetch_add(iterationTime);
         }
     }
 
@@ -1763,8 +1767,11 @@ Molevis::updateAndRender(float delta)
         cameraTranslation += cameraMatrix * Vector3(0, 0, -float(wheelDelta)*0.1f);
     }
 
-    char buffer[64];
-    snprintf(buffer, sizeof(buffer), "%d Atoms. %d Bonds. Sim iter %05d. Frame time %0.3f ms.", int(atomDescriptions.size()), int(atomBondDescriptions.size()), simulationIteration.load(), delta*1000.0);
+    char buffer[128];
+    double simulationTimeSeconds = double(simulationTime.load()) * 1e-6;
+    double simulationIterationsPerSecond = simulationTimeSeconds == 0 ? 0 : simulationIteration.load() / simulationTimeSeconds;
+    
+    snprintf(buffer, sizeof(buffer), "%d Atoms. %d Bonds. Sim iter %05d. IPS %0.5f. Frame time %0.3f ms.", int(atomDescriptions.size()), int(atomBondDescriptions.size()), simulationIteration.load(), simulationIterationsPerSecond, delta*1000.0);
     drawString(buffer, Vector2{5, 5}, Vector4{0.1f, 1.0f, 0.1f, 1.0f});
 
     auto cameraInverseMatrix = cameraMatrix.transposed();

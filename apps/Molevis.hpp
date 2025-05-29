@@ -349,6 +349,7 @@ public:
 
     std::atomic_bool isSimulating = true;
     std::atomic_int simulationIteration = 0;
+    std::atomic_long simulationTime = 0;
     bool useCUDA = false;
 
     bool hasWheelEvent = false;
