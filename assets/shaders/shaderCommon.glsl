@@ -38,8 +38,6 @@ struct AtomDescription
 struct AtomState
 {
     vec3 position;
-    vec3 velocity;
-    vec3 netForce;
 };
 
 struct AtomBondDesc

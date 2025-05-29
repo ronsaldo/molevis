@@ -8,6 +8,7 @@
 #include "AGPU/agpu.hpp"
 #include "AABox.hpp"
 #include "DAABox.hpp"
+#include "DBVH.hpp"
 #include "PeriodicTable.hpp"
 #include "LennardJonesTable.hpp"
 #include "AtomBondDescription.hpp"
@@ -196,6 +197,7 @@ public:
     void advanceLayoutRow();
 
     void simulateIterationWithCuda(double timestep);
+    void computeSimulationBVH();
     void simulateIterationInCPU(double timestep);
     void simulationThreadEntry();
     void startSimulationThread();
@@ -295,6 +297,7 @@ public:
     std::vector<AtomDescription> atomDescriptions; 
     std::vector<AtomBondDescription> atomBondDescriptions; 
     std::vector<AtomSimulationState> simulationAtomState;
+    DBVH simulationBoundingVolumeHierarchy;
 
     AtomDescription *cudaAtomDescriptions = nullptr;
     AtomBondDescription *cudaAtomBondDescriptions = nullptr;
@@ -305,6 +308,7 @@ public:
 
     std::mutex renderingAtomStateMutex;
     std::vector<AtomState> renderingAtomState;
+    DBVH renderingVolumeHierarchy;
     bool renderingAtomStateDirty = true;
 
     std::mutex simulationThreadStateMutex;
@@ -351,6 +355,7 @@ public:
     std::atomic_int simulationIteration = 0;
     std::atomic_long simulationTime = 0;
     bool useCUDA = false;
+    bool useBVH = false;
 
     bool hasWheelEvent = false;
     bool hasHandledWheelEvent = false;

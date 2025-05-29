@@ -119,7 +119,10 @@ Molevis::mainStart(int argc, const char *argv[])
             {
                 useCUDA = true;
             }
-            
+            else if (arg == "-use-bvh")
+            {
+                useBVH = true;
+            }
         }
         else
         {
@@ -706,7 +709,6 @@ Molevis::createIntermediateTexturesAndFramebuffer()
 
         framebufferDisplayWidth = vrDisplayWidth;
         framebufferDisplayHeight = vrDisplayHeight;
-        printf("Make intermediate %d %d\n", framebufferDisplayWidth, framebufferDisplayHeight);   
     }
     else
     {
@@ -993,8 +995,8 @@ Molevis::convertChemfileFrame(chemfiles::Frame &frame)
         auto firstAtomIndex = bond[0];
         auto secondAtomIndex = bond[1];
 
-        const auto &firstAtomDesc = atomDescriptions[firstAtomIndex];
-        const auto &secondAtomDesc = atomDescriptions[secondAtomIndex];
+        //const auto &firstAtomDesc = atomDescriptions[firstAtomIndex];
+        //const auto &secondAtomDesc = atomDescriptions[secondAtomIndex];
 
         const auto &firstAtomPosition = renderingAtomState[firstAtomIndex];
         const auto &secondAtomPosition = renderingAtomState[secondAtomIndex];
@@ -1140,16 +1142,10 @@ Molevis::computeAtomsBoundingBox()
     }
 
     // Recompute the bounding
-    {
-        atomsBoundingBox = DAABox::empty();
-        for(auto &atom : simulationAtomState)
-            atomsBoundingBox.insertPoint(atom.position);
+    modelPosition = Vector3(0, 0, 0);
 
-        //modelPosition = Vector3(0.0, atomsBoundingBox.halfExtent().y*modelScaleFactor, 0.0);
-        modelPosition = Vector3(0, 0, 0);
-    }
-
-
+    computeSimulationBVH();
+    simulationBoundingVolumeHierarchy.swap(renderingVolumeHierarchy);
     for(size_t i = 0;i < simulationAtomState.size(); ++i)
         renderingAtomState[i] = simulationAtomState[i].asRenderingState();
 
@@ -1515,9 +1511,53 @@ Molevis::simulateIterationWithCuda(double timestep)
 }
 
 void
+Molevis::computeSimulationBVH()
+{
+    atomsBoundingBox = DAABox::empty();
+    for(size_t i = 0; i < simulationAtomState.size(); ++i)
+    {
+        auto radius = atomDescriptions[i].radius;
+        auto &position = simulationAtomState[i].position;
+        atomsBoundingBox.insertBox(DAABox::withCenterAndHalfExtent(position, DVector3(radius, radius, radius)));
+    }
+
+    auto boundingBoxExtent = atomsBoundingBox.extent();
+    auto boundingBoxQuanta = boundingBoxExtent / (1<<15);
+
+    simulationBoundingVolumeHierarchy.nodes.clear();
+    simulationBoundingVolumeHierarchy.nodes.reserve(simulationAtomState.size()*2 + 1);
+
+    for(size_t i = 0; i < simulationAtomState.size(); ++i)
+    {
+        auto radius = atomDescriptions[i].radius;
+        auto &position = simulationAtomState[i].position;
+
+        auto quantizedPosition = (position - atomsBoundingBox.min) / boundingBoxQuanta;
+
+        DBVHNode node;
+        node.isLeaf = true;
+        node.boundingBox = DAABox::withCenterAndHalfExtent(position, DVector3(radius, radius, radius));
+
+        node.atomIndex = i;
+        node.quantizedCenterPosition = computeZOrder(quantizedPosition.x, quantizedPosition.y, quantizedPosition.z);
+        simulationBoundingVolumeHierarchy.nodes.push_back(node);
+    }
+
+    std::sort(simulationBoundingVolumeHierarchy.nodes.begin(), simulationBoundingVolumeHierarchy.nodes.end(), [](const DBVHNode &a, const DBVHNode &b){
+        return a.quantizedCenterPosition < b.quantizedCenterPosition;
+    });
+
+    simulationBoundingVolumeHierarchy.buildInnerNodes();
+}
+
+void
 Molevis::simulateIterationInCPU(double timestep)
 {
     assert(simulationAtomState.size() == renderingAtomState.size());
+    // Compute the BVH
+    if(useBVH)
+        computeSimulationBVH();
+
     // Reset the net force.
     for(size_t i = 0; i < simulationAtomState.size(); ++i)
         simulationAtomState[i].netForce = DVector3(0, 0, 0);
@@ -1534,10 +1574,10 @@ Molevis::simulateIterationInCPU(double timestep)
         double firstLennardJonesEpsilon = firstAtomDesc.lennardJonesEpsilon;
         double firstLennardJonesSigma   = firstAtomDesc.lennardJonesSigma;
 
-        for(size_t j = 0; j < simulationAtomState.size(); ++j)
-        {
+        DSphere firstAtomInfluenceSphere = {firstLennardJonesCutoff, firstPosition};
+        auto &&simulateWith = [&](size_t j) {
             if(i == j)
-                continue;
+                return;
 
             auto &secondAtomDesc = atomDescriptions[j];
             auto &secondAtomState = simulationAtomState[j];
@@ -1548,7 +1588,7 @@ Molevis::simulateIterationInCPU(double timestep)
             double secondLennardJonesEpsilon = secondAtomDesc.lennardJonesEpsilon;
             double secondLennardJonesSigma   = secondAtomDesc.lennardJonesSigma;
 
-            double lennardJonesCutoff = firstLennardJonesCutoff + secondLennardJonesCutoff;
+            double lennardJonesCutoff = std::min(firstLennardJonesCutoff, secondLennardJonesCutoff);
             double lennardJonesEpsilon = sqrt(firstLennardJonesEpsilon*secondLennardJonesEpsilon);
             double lennardJonesSigma = (firstLennardJonesSigma + secondLennardJonesSigma) * 0.5;
 
@@ -1559,10 +1599,17 @@ Molevis::simulateIterationInCPU(double timestep)
                 auto normalizedDirection = direction / dist;
                 auto force = -normalizedDirection * lennardJonesDerivative(dist, lennardJonesSigma, lennardJonesEpsilon);
                 firstAtomState.netForce = firstAtomState.netForce + force;
-
-                //if(i == 94 && j == 95)
-                //    printf("Dist %zu %zu: %f\n", i, j, dist);
             }
+        };
+
+        if(useBVH)
+        {
+            simulationBoundingVolumeHierarchy.atomsIntersectingSphereDo(firstAtomInfluenceSphere, simulateWith);
+        }
+        else
+        {
+            for(size_t j = 0; j < simulationAtomState.size(); ++j)
+                simulateWith(j);
         }
     }
 
@@ -1637,6 +1684,7 @@ Molevis::simulateIterationInCPU(double timestep)
         for(size_t i = 0; i < simulationAtomState.size(); ++i)
             renderingAtomState[i] = simulationAtomState[i].asRenderingState();
         renderingAtomStateDirty = true;
+        renderingVolumeHierarchy.swap(simulationBoundingVolumeHierarchy);
     }
 
     simulationIteration.fetch_add(1);
@@ -1662,9 +1710,13 @@ Molevis::simulationThreadEntry()
         {
             auto iterationStartTime = getMicroseconds();
             if(useCUDA)
+            {
                 simulateIterationWithCuda(SimulationTimeStep);
+            }
             else
+            {
                 simulateIterationInCPU(SimulationTimeStep);
+            }
             auto iterationEndTime = getMicroseconds();
             auto iterationTime = iterationEndTime - iterationStartTime;
             simulationTime.fetch_add(iterationTime);
