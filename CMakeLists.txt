@@ -15,7 +15,16 @@ if (MSVC)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
 else()
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=c++17")
+
+    if(APPLE)
+        add_definitions(-DUSE_NEON)
+    else()
+    	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx")
+        add_definitions(-DUSE_AVX)
+    endif()
+
 endif()
+
 
 set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/dist")
 

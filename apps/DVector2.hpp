@@ -1,7 +1,7 @@
 #ifndef MOLLEVIS_DDVector2_HPP
 #define MOLLEVIS_DDVector2_HPP
 
-struct alignas(8) DVector2
+struct alignas(16) DVector2
 {
     double x, y;
 

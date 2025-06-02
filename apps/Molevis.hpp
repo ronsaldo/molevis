@@ -296,20 +296,20 @@ public:
 
     std::vector<AtomDescription> atomDescriptions; 
     std::vector<AtomBondDescription> atomBondDescriptions; 
-    std::vector<AtomSimulationState> simulationAtomState;
+    std::vector<AtomSimulationState> simulationAtomRenderingState;
     DBVH simulationBoundingVolumeHierarchy;
 
     AtomDescription *cudaAtomDescriptions = nullptr;
     AtomBondDescription *cudaAtomBondDescriptions = nullptr;
-    AtomSimulationState *cudaSimulationAtomState = nullptr;
+    AtomSimulationState *cudaSimulationAtomRenderingState = nullptr;
 
     double *cudaKineticEnergyFrontBuffer = nullptr;
     double *cudaKineticEnergyBackBuffer = nullptr;
 
-    std::mutex renderingAtomStateMutex;
-    std::vector<AtomState> renderingAtomState;
+    std::mutex renderingAtomRenderingStateMutex;
+    std::vector<AtomRenderingState> renderingAtomRenderingState;
     DBVH renderingVolumeHierarchy;
-    bool renderingAtomStateDirty = true;
+    bool renderingAtomRenderingStateDirty = true;
 
     std::mutex simulationThreadStateMutex;
     std::condition_variable simulationThreadStateConditionChanged;

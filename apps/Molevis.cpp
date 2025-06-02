@@ -432,15 +432,15 @@ Molevis::mainStart(int argc, const char *argv[])
     // Atom state buffers
     {
         agpu_buffer_description desc = {};
-        desc.size = (sizeof(AtomState)*std::max(renderingAtomState.size(), size_t(1024)) + 255) & (-256);
+        desc.size = (sizeof(AtomRenderingState)*std::max(renderingAtomRenderingState.size(), size_t(1024)) + 255) & (-256);
         desc.heap_type = AGPU_MEMORY_HEAP_TYPE_DEVICE_LOCAL;
         desc.usage_modes = agpu_buffer_usage_mask(AGPU_COPY_DESTINATION_BUFFER | AGPU_STORAGE_BUFFER);
         desc.main_usage_mode = AGPU_STORAGE_BUFFER;
         desc.mapping_flags = AGPU_MAP_DYNAMIC_STORAGE_BIT;
         
-        size_t uploadSize = sizeof(AtomState)*renderingAtomState.size();
+        size_t uploadSize = sizeof(AtomRenderingState)*renderingAtomRenderingState.size();
         atomStateFrontBuffer = device->createBuffer(&desc, nullptr);
-        atomStateFrontBuffer->uploadBufferData(0, agpu_size(uploadSize), renderingAtomState.data());
+        atomStateFrontBuffer->uploadBufferData(0, agpu_size(uploadSize), renderingAtomRenderingState.data());
     }
 
     atomFrontBufferBinding = shaderSignature->createShaderResourceBinding(2);
@@ -952,8 +952,8 @@ Molevis::convertChemfileFrame(chemfiles::Frame &frame)
     Random rand;
     const auto &positions = frame.positions();
     atomDescriptions.reserve(frame.size());
-    simulationAtomState.reserve(frame.size());
-    renderingAtomState.reserve(frame.size());
+    simulationAtomRenderingState.reserve(frame.size());
+    renderingAtomRenderingState.reserve(frame.size());
     
     for(size_t i = 0; i < positions.size(); ++i)
     {
@@ -984,8 +984,8 @@ Molevis::convertChemfileFrame(chemfiles::Frame &frame)
             simulationState.position = DVector3(atomPosition[0], atomPosition[1], atomPosition[2]);
 
             atomDescriptions.push_back(description);
-            simulationAtomState.push_back(simulationState);
-            renderingAtomState.push_back(simulationState.asRenderingState());
+            simulationAtomRenderingState.push_back(simulationState);
+            renderingAtomRenderingState.push_back(simulationState.asRenderingState());
         }
     }
 
@@ -998,8 +998,8 @@ Molevis::convertChemfileFrame(chemfiles::Frame &frame)
         //const auto &firstAtomDesc = atomDescriptions[firstAtomIndex];
         //const auto &secondAtomDesc = atomDescriptions[secondAtomIndex];
 
-        const auto &firstAtomPosition = renderingAtomState[firstAtomIndex];
-        const auto &secondAtomPosition = renderingAtomState[secondAtomIndex];
+        const auto &firstAtomPosition = renderingAtomRenderingState[firstAtomIndex];
+        const auto &secondAtomPosition = renderingAtomRenderingState[secondAtomIndex];
 
         auto atomEquilibriumDistance = (firstAtomPosition.position - secondAtomPosition.position).length();
         //auto atomEquilibriumDistance = firstAtomDesc.radius + secondAtomDesc.radius;
@@ -1023,8 +1023,8 @@ void
 Molevis::generateTestDataset()
 {
     atomDescriptions.reserve(3);
-    renderingAtomState.reserve(3);
-    simulationAtomState.reserve(3);
+    renderingAtomRenderingState.reserve(3);
+    simulationAtomRenderingState.reserve(3);
 
     auto hydrogenDesc = periodicTable.makeAtomDescriptionForSymbol("H");
     hydrogenDesc.color = getOrCreateColorForAtomType("H");
@@ -1037,24 +1037,24 @@ Molevis::generateTestDataset()
         auto state = AtomSimulationState{};
         state.position = DVector3(-5, 0.0, 0.0);
         atomDescriptions.push_back(hydrogenDesc);
-        renderingAtomState.push_back(state.asRenderingState());
-        simulationAtomState.push_back(state);
+        renderingAtomRenderingState.push_back(state.asRenderingState());
+        simulationAtomRenderingState.push_back(state);
     }
 
     {
         auto state = AtomSimulationState{};
         state.position = DVector3(5, 0.0, 0.0);
         atomDescriptions.push_back(hydrogenDesc);
-        renderingAtomState.push_back(state.asRenderingState());
-        simulationAtomState.push_back(state);
+        renderingAtomRenderingState.push_back(state.asRenderingState());
+        simulationAtomRenderingState.push_back(state);
     }
 
     {
         auto state = AtomSimulationState{};
         state.position = DVector3(0, 0.0, 0.0);
         atomDescriptions.push_back(oxygenDesc);
-        renderingAtomState.push_back(state.asRenderingState());
-        simulationAtomState.push_back(state);
+        renderingAtomRenderingState.push_back(state.asRenderingState());
+        simulationAtomRenderingState.push_back(state);
     }
 
     {
@@ -1087,8 +1087,8 @@ Molevis::generateRandomDataset(size_t atomsToGenerate, size_t bondsToGenerate)
 {
     Random rand;
     atomDescriptions.reserve(atomsToGenerate);
-    renderingAtomState.reserve(atomsToGenerate);
-    simulationAtomState.reserve(atomsToGenerate);
+    renderingAtomRenderingState.reserve(atomsToGenerate);
+    simulationAtomRenderingState.reserve(atomsToGenerate);
 
     for(size_t i = 0; i < atomsToGenerate; ++i)
     {
@@ -1103,8 +1103,8 @@ Molevis::generateRandomDataset(size_t atomsToGenerate, size_t bondsToGenerate)
         state.position = rand.randDVector3(-10, 10);
 
         atomDescriptions.push_back(description);
-        simulationAtomState.push_back(state);
-        renderingAtomState.push_back(state.asRenderingState());
+        simulationAtomRenderingState.push_back(state);
+        renderingAtomRenderingState.push_back(state.asRenderingState());
     }
 
     for(size_t i = 0; i < bondsToGenerate; ++i)
@@ -1134,10 +1134,10 @@ Molevis::computeAtomsBoundingBox()
     // Move the atoms to their bounding box center
     {
         atomsBoundingBox = DAABox::empty();
-        for(auto &atom : simulationAtomState)
+        for(auto &atom : simulationAtomRenderingState)
             atomsBoundingBox.insertPoint(atom.position);
         auto center = atomsBoundingBox.center();
-        for(auto &atom : simulationAtomState)
+        for(auto &atom : simulationAtomRenderingState)
             atom.position = atom.position - center;
     }
 
@@ -1146,8 +1146,8 @@ Molevis::computeAtomsBoundingBox()
 
     computeSimulationBVH();
     simulationBoundingVolumeHierarchy.swap(renderingVolumeHierarchy);
-    for(size_t i = 0;i < simulationAtomState.size(); ++i)
-        renderingAtomState[i] = simulationAtomState[i].asRenderingState();
+    for(size_t i = 0;i < simulationAtomRenderingState.size(); ++i)
+        renderingAtomRenderingState[i] = simulationAtomRenderingState[i].asRenderingState();
 
 }
 
@@ -1468,16 +1468,16 @@ Molevis::simulateIterationWithCuda(double timestep)
         cudaMemcpy(cudaAtomBondDescriptions, atomBondDescriptions.data(), bufferSize, cudaMemcpyHostToDevice);
     }
 
-    size_t simulationStateBufferSize = simulationAtomState.size()*sizeof(AtomSimulationState);
-    if (!cudaSimulationAtomState)
+    size_t simulationStateBufferSize = simulationAtomRenderingState.size()*sizeof(AtomSimulationState);
+    if (!cudaSimulationAtomRenderingState)
     {
-        cudaMalloc((void**)&cudaSimulationAtomState, simulationStateBufferSize);
-        cudaMemcpy(cudaSimulationAtomState, simulationAtomState.data(), simulationStateBufferSize, cudaMemcpyHostToDevice);
+        cudaMalloc((void**)&cudaSimulationAtomRenderingState, simulationStateBufferSize);
+        cudaMemcpy(cudaSimulationAtomRenderingState, simulationAtomRenderingState.data(), simulationStateBufferSize, cudaMemcpyHostToDevice);
     }
 
     if(!cudaKineticEnergyFrontBuffer)
     {
-        size_t bufferSize = simulationAtomState.size()*sizeof(double);
+        size_t bufferSize = simulationAtomRenderingState.size()*sizeof(double);
         cudaMalloc((void**)&cudaKineticEnergyFrontBuffer, bufferSize);
         cudaMalloc((void**)&cudaKineticEnergyBackBuffer, bufferSize);
     }
@@ -1486,12 +1486,12 @@ Molevis::simulateIterationWithCuda(double timestep)
     performCudaSimulationStep(
         atomDescriptions.size(), cudaAtomDescriptions,
         atomBondDescriptions.size(), cudaAtomBondDescriptions,
-        simulationAtomState.size(), cudaSimulationAtomState,
+        simulationAtomRenderingState.size(), cudaSimulationAtomRenderingState,
         cudaKineticEnergyFrontBuffer, cudaKineticEnergyBackBuffer
     );
 
     // Readback result.
-    cudaMemcpy(simulationAtomState.data(), cudaSimulationAtomState, simulationStateBufferSize, cudaMemcpyDeviceToHost);
+    cudaMemcpy(simulationAtomRenderingState.data(), cudaSimulationAtomRenderingState, simulationStateBufferSize, cudaMemcpyDeviceToHost);
     auto cudaError = cudaDeviceSynchronize();
     if(cudaError)
     {
@@ -1501,10 +1501,10 @@ Molevis::simulateIterationWithCuda(double timestep)
 
     // Upload the new state
     {
-        std::unique_lock l(renderingAtomStateMutex);
-        for(size_t i = 0; i < simulationAtomState.size(); ++i)
-            renderingAtomState[i] = simulationAtomState[i].asRenderingState();
-        renderingAtomStateDirty = true;
+        std::unique_lock l(renderingAtomRenderingStateMutex);
+        for(size_t i = 0; i < simulationAtomRenderingState.size(); ++i)
+            renderingAtomRenderingState[i] = simulationAtomRenderingState[i].asRenderingState();
+        renderingAtomRenderingStateDirty = true;
     }
 
     simulationIteration.fetch_add(1);
@@ -1514,10 +1514,10 @@ void
 Molevis::computeSimulationBVH()
 {
     atomsBoundingBox = DAABox::empty();
-    for(size_t i = 0; i < simulationAtomState.size(); ++i)
+    for(size_t i = 0; i < simulationAtomRenderingState.size(); ++i)
     {
         auto radius = atomDescriptions[i].radius;
-        auto &position = simulationAtomState[i].position;
+        auto &position = simulationAtomRenderingState[i].position;
         atomsBoundingBox.insertBox(DAABox::withCenterAndHalfExtent(position, DVector3(radius, radius, radius)));
     }
 
@@ -1525,12 +1525,12 @@ Molevis::computeSimulationBVH()
     auto boundingBoxQuanta = boundingBoxExtent / (1<<15);
 
     simulationBoundingVolumeHierarchy.nodes.clear();
-    simulationBoundingVolumeHierarchy.nodes.reserve(simulationAtomState.size()*2 + 1);
+    simulationBoundingVolumeHierarchy.nodes.reserve(simulationAtomRenderingState.size()*2 + 1);
 
-    for(size_t i = 0; i < simulationAtomState.size(); ++i)
+    for(size_t i = 0; i < simulationAtomRenderingState.size(); ++i)
     {
         auto radius = atomDescriptions[i].radius;
-        auto &position = simulationAtomState[i].position;
+        auto &position = simulationAtomRenderingState[i].position;
 
         auto quantizedPosition = (position - atomsBoundingBox.min) / boundingBoxQuanta;
 
@@ -1553,22 +1553,22 @@ Molevis::computeSimulationBVH()
 void
 Molevis::simulateIterationInCPU(double timestep)
 {
-    assert(simulationAtomState.size() == renderingAtomState.size());
+    assert(simulationAtomRenderingState.size() == renderingAtomRenderingState.size());
     // Compute the BVH
     if(useBVH)
         computeSimulationBVH();
 
     // Reset the net force.
-    for(size_t i = 0; i < simulationAtomState.size(); ++i)
-        simulationAtomState[i].netForce = DVector3(0, 0, 0);
+    for(size_t i = 0; i < simulationAtomRenderingState.size(); ++i)
+        simulationAtomRenderingState[i].netForce = DVector3(0, 0, 0);
 
     // Lennard-jones potential
-    for(size_t i = 0; i < simulationAtomState.size(); ++i)
+    for(size_t i = 0; i < simulationAtomRenderingState.size(); ++i)
     {
         auto &firstAtomDesc = atomDescriptions[i];
-        auto &firstAtomState = simulationAtomState[i];
+        auto &firstAtomRenderingState = simulationAtomRenderingState[i];
 
-        DVector3 firstPosition = firstAtomState.position;
+        DVector3 firstPosition = firstAtomRenderingState.position;
 
         double firstLennardJonesCutoff  = firstAtomDesc.lennardJonesCutoff;
         double firstLennardJonesEpsilon = firstAtomDesc.lennardJonesEpsilon;
@@ -1580,9 +1580,9 @@ Molevis::simulateIterationInCPU(double timestep)
                 return;
 
             auto &secondAtomDesc = atomDescriptions[j];
-            auto &secondAtomState = simulationAtomState[j];
+            auto &secondAtomRenderingState = simulationAtomRenderingState[j];
 
-            DVector3 secondPosition = secondAtomState.position;
+            DVector3 secondPosition = secondAtomRenderingState.position;
 
             double secondLennardJonesCutoff  = secondAtomDesc.lennardJonesCutoff;
             double secondLennardJonesEpsilon = secondAtomDesc.lennardJonesEpsilon;
@@ -1598,7 +1598,7 @@ Molevis::simulateIterationInCPU(double timestep)
             {
                 auto normalizedDirection = direction / dist;
                 auto force = -normalizedDirection * lennardJonesDerivative(dist, lennardJonesSigma, lennardJonesEpsilon);
-                firstAtomState.netForce = firstAtomState.netForce + force;
+                firstAtomRenderingState.netForce = firstAtomRenderingState.netForce + force;
             }
         };
 
@@ -1608,7 +1608,7 @@ Molevis::simulateIterationInCPU(double timestep)
         }
         else
         {
-            for(size_t j = 0; j < simulationAtomState.size(); ++j)
+            for(size_t j = 0; j < simulationAtomRenderingState.size(); ++j)
                 simulateWith(j);
         }
     }
@@ -1616,36 +1616,36 @@ Molevis::simulateIterationInCPU(double timestep)
     // Morse bond
     /*for(auto &bond : atomBondDescriptions)
     {
-        auto &firstAtomState = simulationAtomState[bond.firstAtomIndex];
-        auto &secondAtomState = simulationAtomState[bond.secondAtomIndex];
+        auto &firstAtomRenderingState = simulationAtomRenderingState[bond.firstAtomIndex];
+        auto &secondAtomRenderingState = simulationAtomRenderingState[bond.secondAtomIndex];
 
-        auto direction = firstAtomState.position - secondAtomState.position;
+        auto direction = firstAtomRenderingState.position - secondAtomRenderingState.position;
         auto distance = direction.length();
         auto normalizedDirection = direction / distance;
         auto force = -normalizedDirection*morsePotentialDerivative(distance, bond.morseWellDepth, bond.morseWellWidth, bond.equilibriumDistance);
-        firstAtomState.netForce = firstAtomState.netForce + force;
-        secondAtomState.netForce = secondAtomState.netForce - force;
+        firstAtomRenderingState.netForce = firstAtomRenderingState.netForce + force;
+        secondAtomRenderingState.netForce = secondAtomRenderingState.netForce - force;
     }*/
 
     // Hooke law bond
     for(auto &bond : atomBondDescriptions)
     {
-        auto &firstAtomState = simulationAtomState[bond.firstAtomIndex];
-        auto &secondAtomState = simulationAtomState[bond.secondAtomIndex];
+        auto &firstAtomRenderingState = simulationAtomRenderingState[bond.firstAtomIndex];
+        auto &secondAtomRenderingState = simulationAtomRenderingState[bond.secondAtomIndex];
 
-        auto direction = firstAtomState.position - secondAtomState.position;
+        auto direction = firstAtomRenderingState.position - secondAtomRenderingState.position;
         auto distance = direction.length();
         auto normalizedDirection = direction / distance;
         auto force = -normalizedDirection*hookPotentialDerivative(distance, bond.equilibriumDistance, 100.0);
-        firstAtomState.netForce = firstAtomState.netForce + force;
-        secondAtomState.netForce = secondAtomState.netForce - force;
+        firstAtomRenderingState.netForce = firstAtomRenderingState.netForce + force;
+        secondAtomRenderingState.netForce = secondAtomRenderingState.netForce - force;
     }
 
     // Integrate the velocites and compute total kinetic energy.
     double totalKineticEnergy = 0.0;
-    for(size_t i = 0; i < simulationAtomState.size(); ++i)
+    for(size_t i = 0; i < simulationAtomRenderingState.size(); ++i)
     {
-        auto &state = simulationAtomState[i];
+        auto &state = simulationAtomRenderingState[i];
         auto mass = atomDescriptions[i].mass;
         auto acceleration = state.netForce / mass;
         //printf("%zu %f %f %f\n", i, state.netForce.x, state.netForce.y, state.netForce.z);
@@ -1654,7 +1654,7 @@ Molevis::simulateIterationInCPU(double timestep)
     }
 
     // Compute the average kinetic energy.
-    double averageKineticEnergy = totalKineticEnergy / double(simulationAtomState.size());
+    double averageKineticEnergy = totalKineticEnergy / double(simulationAtomRenderingState.size());
     //printf("total kinetic %f average %f\n", totalKineticEnergy, averageKineticEnergy);;
 
     double targetKineticEnergy = 1.0;
@@ -1662,28 +1662,28 @@ Molevis::simulateIterationInCPU(double timestep)
     //double kineticEnergyLambda = 1.0;
     //printf("lambda %f\n", kineticEnergyLambda);
     
-    for(size_t i = 0; i < simulationAtomState.size(); ++i)
+    for(size_t i = 0; i < simulationAtomRenderingState.size(); ++i)
     {
-        auto &state = simulationAtomState[i];
+        auto &state = simulationAtomRenderingState[i];
         state.velocity = state.velocity * kineticEnergyLambda;
     }
         
 
 
     // Integrate the positions
-    for(size_t i = 0; i < simulationAtomState.size(); ++i)
+    for(size_t i = 0; i < simulationAtomRenderingState.size(); ++i)
     {
-        auto &state = simulationAtomState[i];
+        auto &state = simulationAtomRenderingState[i];
         state.position = state.position + state.velocity*timestep;
     }
 
 
     // Upload the new state
     {
-        std::unique_lock l(renderingAtomStateMutex);
-        for(size_t i = 0; i < simulationAtomState.size(); ++i)
-            renderingAtomState[i] = simulationAtomState[i].asRenderingState();
-        renderingAtomStateDirty = true;
+        std::unique_lock l(renderingAtomRenderingStateMutex);
+        for(size_t i = 0; i < simulationAtomRenderingState.size(); ++i)
+            renderingAtomRenderingState[i] = simulationAtomRenderingState[i].asRenderingState();
+        renderingAtomRenderingStateDirty = true;
         renderingVolumeHierarchy.swap(simulationBoundingVolumeHierarchy);
     }
 
@@ -1866,11 +1866,11 @@ Molevis::updateAndRender(float delta)
 
     // Upload the new state
     {
-        std::unique_lock l(renderingAtomStateMutex);
-        if(renderingAtomStateDirty)
+        std::unique_lock l(renderingAtomRenderingStateMutex);
+        if(renderingAtomRenderingStateDirty)
         {
-            atomStateFrontBuffer->uploadBufferData(0, agpu_size(renderingAtomState.size()*sizeof(AtomState)), renderingAtomState.data());
-            renderingAtomStateDirty = false;
+            atomStateFrontBuffer->uploadBufferData(0, agpu_size(renderingAtomRenderingState.size()*sizeof(AtomRenderingState)), renderingAtomRenderingState.data());
+            renderingAtomRenderingStateDirty = false;
         }
     }
 
@@ -1885,10 +1885,10 @@ Molevis::findHighlightedAtom(const Ray &ray)
     float bestFoundDistance = INFINITY;
 
     {
-        std::unique_lock l(renderingAtomStateMutex);
-        for(size_t i = 0; i < renderingAtomState.size(); ++i)
+        std::unique_lock l(renderingAtomRenderingStateMutex);
+        for(size_t i = 0; i < renderingAtomRenderingState.size(); ++i)
         {
-            auto &atom = renderingAtomState[i];
+            auto &atom = renderingAtomRenderingState[i];
 
             Sphere atomSphere;
             atomSphere.center = atom.position;

@@ -35,7 +35,7 @@ struct AtomDescription
     vec4 color;
 };
 
-struct AtomState
+struct AtomRenderingState
 {
     vec3 position;
 };
@@ -86,9 +86,9 @@ layout(std430, set = 2, binding = 1) buffer AtomBondDescriptionBufferBlock
     AtomBondDesc AtomBondDescriptionBuffer[];
 };
 
-layout(std430, set = 2, binding = 2) buffer AtomStateBufferBlock
+layout(std430, set = 2, binding = 2) buffer AtomRenderingStateBufferBlock
 {
-    AtomState AtomStateBuffer[];
+    AtomRenderingState AtomRenderingStateBuffer[];
 };
 
 layout(std430, set = 3, binding = 0) buffer ScreenBoundingQuadBufferBlock

@@ -60,7 +60,7 @@ void main()
 
     // Fetch the instance data.
     AtomDescription desc = AtomDescriptionBuffer[atomIndex];
-    AtomState state = AtomStateBuffer[atomIndex];
+    AtomRenderingState state = AtomRenderingStateBuffer[atomIndex];
 
     // Get the atom world position
     vec3 worldCenter = (CameraState.atomModelMatrix*vec4(state.position, 1.0)).xyz;

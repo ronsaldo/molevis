@@ -72,10 +72,10 @@ void computeLennardJonesForce(int atomCount, AtomDescription *atomDescriptions, 
     for(int i = index; i < atomCount; i += stride)
     {
         AtomDescription &firstAtomDesc = atomDescriptions[i];
-        AtomSimulationState &firstAtomState = atomStates[i];
+        AtomSimulationState &firstAtomRenderingState = atomStates[i];
 
         double3 netForce = make_double3(atomStates[i].netForce.x, atomStates[i].netForce.y, atomStates[i].netForce.z);
-        double3 firstPosition = make_double3(firstAtomState.position.x, firstAtomState.position.y, firstAtomState.position.z);
+        double3 firstPosition = make_double3(firstAtomRenderingState.position.x, firstAtomRenderingState.position.y, firstAtomRenderingState.position.z);
 
         double firstLennardJonesCutoff  = firstAtomDesc.lennardJonesCutoff;
         double firstLennardJonesEpsilon = firstAtomDesc.lennardJonesEpsilon;
@@ -87,9 +87,9 @@ void computeLennardJonesForce(int atomCount, AtomDescription *atomDescriptions, 
                 continue;
 
             AtomDescription &secondAtomDesc = atomDescriptions[j];
-            AtomSimulationState &secondAtomState = atomStates[j];
+            AtomSimulationState &secondAtomRenderingState = atomStates[j];
 
-            double3 secondPosition = make_double3(secondAtomState.position.x, secondAtomState.position.y, secondAtomState.position.z);
+            double3 secondPosition = make_double3(secondAtomRenderingState.position.x, secondAtomRenderingState.position.y, secondAtomRenderingState.position.z);
 
             double secondLennardJonesCutoff  = secondAtomDesc.lennardJonesCutoff;
             double secondLennardJonesEpsilon = secondAtomDesc.lennardJonesEpsilon;
@@ -142,13 +142,13 @@ void computeBondForce(int bondCount, AtomBondDescription *atomBondDescriptions, 
     for(int i = index; i < bondCount; i += stride)
     {
         AtomBondDescription &bond = atomBondDescriptions[i];
-        AtomSimulationState &firstAtomState = atomStates[bond.firstAtomIndex];
-        AtomSimulationState &secondAtomState = atomStates[bond.secondAtomIndex];
+        AtomSimulationState &firstAtomRenderingState = atomStates[bond.firstAtomIndex];
+        AtomSimulationState &secondAtomRenderingState = atomStates[bond.secondAtomIndex];
 
         double3 direction = make_double3(
-            firstAtomState.position.x - secondAtomState.position.x,
-            firstAtomState.position.y - secondAtomState.position.y,
-            firstAtomState.position.z - secondAtomState.position.z
+            firstAtomRenderingState.position.x - secondAtomRenderingState.position.x,
+            firstAtomRenderingState.position.y - secondAtomRenderingState.position.y,
+            firstAtomRenderingState.position.z - secondAtomRenderingState.position.z
         );
         double distance = sqrt(direction.x*direction.x + direction.y*direction.y + direction.z*direction.z);
         double3 normalizedDirection = make_double3(
@@ -164,13 +164,13 @@ void computeBondForce(int bondCount, AtomBondDescription *atomBondDescriptions, 
             -normalizedDirection.z*hookPotentialDer
         );
 
-        atomicAdd(&firstAtomState.netForce.x, force.x);
-        atomicAdd(&firstAtomState.netForce.y, force.y);
-        atomicAdd(&firstAtomState.netForce.z, force.z);
+        atomicAdd(&firstAtomRenderingState.netForce.x, force.x);
+        atomicAdd(&firstAtomRenderingState.netForce.y, force.y);
+        atomicAdd(&firstAtomRenderingState.netForce.z, force.z);
 
-        atomicAdd(&secondAtomState.netForce.x, -force.x);
-        atomicAdd(&secondAtomState.netForce.y, -force.y);
-        atomicAdd(&secondAtomState.netForce.z, -force.z);
+        atomicAdd(&secondAtomRenderingState.netForce.x, -force.x);
+        atomicAdd(&secondAtomRenderingState.netForce.y, -force.y);
+        atomicAdd(&secondAtomRenderingState.netForce.z, -force.z);
     }
 }
 

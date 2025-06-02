@@ -4,7 +4,7 @@
 #include "Vector3.hpp"
 #include "DVector3.hpp"
 
-struct AtomState
+struct AtomRenderingState
 {
     Vector3 position;
 };
@@ -15,9 +15,9 @@ struct AtomSimulationState
     DVector3 velocity;
     DVector3 netForce;
 
-    AtomState asRenderingState()
+    AtomRenderingState asRenderingState()
     {
-        return AtomState{
+        return AtomRenderingState{
             {float(position.x), float(position.y), float(position.z)},
         };
     }
