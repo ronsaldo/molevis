@@ -1566,9 +1566,9 @@ Molevis::simulateIterationInCPU(double timestep)
     for(size_t i = 0; i < simulationAtomRenderingState.size(); ++i)
     {
         auto &firstAtomDesc = atomDescriptions[i];
-        auto &firstAtomRenderingState = simulationAtomRenderingState[i];
+        auto &firstAtomState = simulationAtomRenderingState[i];
 
-        DVector3 firstPosition = firstAtomRenderingState.position;
+        DVector3 firstPosition = firstAtomState.position;
 
         double firstLennardJonesCutoff  = firstAtomDesc.lennardJonesCutoff;
         double firstLennardJonesEpsilon = firstAtomDesc.lennardJonesEpsilon;
@@ -1580,9 +1580,9 @@ Molevis::simulateIterationInCPU(double timestep)
                 return;
 
             auto &secondAtomDesc = atomDescriptions[j];
-            auto &secondAtomRenderingState = simulationAtomRenderingState[j];
+            auto &secondAtomState = simulationAtomRenderingState[j];
 
-            DVector3 secondPosition = secondAtomRenderingState.position;
+            DVector3 secondPosition = secondAtomState.position;
 
             double secondLennardJonesCutoff  = secondAtomDesc.lennardJonesCutoff;
             double secondLennardJonesEpsilon = secondAtomDesc.lennardJonesEpsilon;
@@ -1593,12 +1593,13 @@ Molevis::simulateIterationInCPU(double timestep)
             double lennardJonesSigma = (firstLennardJonesSigma + secondLennardJonesSigma) * 0.5;
 
             DVector3 direction = firstPosition - secondPosition;
-            auto dist = direction.length();
-            if(1e-6 < dist && dist < lennardJonesCutoff)
+            // HACK: find a way for removing this dist
+            auto dist = std::max(1.0, direction.length());
+            if(dist < lennardJonesCutoff)
             {
                 auto normalizedDirection = direction / dist;
                 auto force = -normalizedDirection * lennardJonesDerivative(dist, lennardJonesSigma, lennardJonesEpsilon);
-                firstAtomRenderingState.netForce = firstAtomRenderingState.netForce + force;
+                firstAtomState.netForce = firstAtomState.netForce + force;
             }
         };
 
@@ -1617,28 +1618,28 @@ Molevis::simulateIterationInCPU(double timestep)
     /*for(auto &bond : atomBondDescriptions)
     {
         auto &firstAtomRenderingState = simulationAtomRenderingState[bond.firstAtomIndex];
-        auto &secondAtomRenderingState = simulationAtomRenderingState[bond.secondAtomIndex];
+        auto &secondAtomState = simulationAtomRenderingState[bond.secondAtomIndex];
 
-        auto direction = firstAtomRenderingState.position - secondAtomRenderingState.position;
+        auto direction = firstAtomRenderingState.position - secondAtomState.position;
         auto distance = direction.length();
         auto normalizedDirection = direction / distance;
         auto force = -normalizedDirection*morsePotentialDerivative(distance, bond.morseWellDepth, bond.morseWellWidth, bond.equilibriumDistance);
         firstAtomRenderingState.netForce = firstAtomRenderingState.netForce + force;
-        secondAtomRenderingState.netForce = secondAtomRenderingState.netForce - force;
+        secondAtomState.netForce = secondAtomState.netForce - force;
     }*/
 
     // Hooke law bond
     for(auto &bond : atomBondDescriptions)
     {
-        auto &firstAtomRenderingState = simulationAtomRenderingState[bond.firstAtomIndex];
-        auto &secondAtomRenderingState = simulationAtomRenderingState[bond.secondAtomIndex];
+        auto &firstAtomState = simulationAtomRenderingState[bond.firstAtomIndex];
+        auto &secondAtomState = simulationAtomRenderingState[bond.secondAtomIndex];
 
-        auto direction = firstAtomRenderingState.position - secondAtomRenderingState.position;
+        auto direction = firstAtomState.position - secondAtomState.position;
         auto distance = direction.length();
         auto normalizedDirection = direction / distance;
         auto force = -normalizedDirection*hookPotentialDerivative(distance, bond.equilibriumDistance, 100.0);
-        firstAtomRenderingState.netForce = firstAtomRenderingState.netForce + force;
-        secondAtomRenderingState.netForce = secondAtomRenderingState.netForce - force;
+        firstAtomState.netForce = firstAtomState.netForce + force;
+        secondAtomState.netForce = secondAtomState.netForce - force;
     }
 
     // Integrate the velocites and compute total kinetic energy.
@@ -1655,7 +1656,7 @@ Molevis::simulateIterationInCPU(double timestep)
 
     // Compute the average kinetic energy.
     double averageKineticEnergy = totalKineticEnergy / double(simulationAtomRenderingState.size());
-    //printf("total kinetic %f average %f\n", totalKineticEnergy, averageKineticEnergy);;
+    //printf("total kinetic %f average %f\n", totalKineticEnergy, averageKineticEnergy);
 
     double targetKineticEnergy = 1.0;
     double kineticEnergyLambda = targetKineticEnergy / std::max(0.01, averageKineticEnergy);

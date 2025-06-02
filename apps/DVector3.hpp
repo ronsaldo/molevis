@@ -44,7 +44,12 @@ struct alignas(32) DVector3
 
     double dot(const DVector3 &o) const
     {
-        return x*o.x + y*o.y + z*o.z;
+        return ((*this) * o).sum();
+    }
+
+    double sum() const
+    {
+        return x + y + z;
     }
 
     double length2() const

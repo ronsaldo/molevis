@@ -4,7 +4,7 @@
 #ifndef __NVCC__
 #   ifdef USE_AVX
 #       include <immintrin.h>
-#       define USE_AVX_VECTORS
+//#       define USE_AVX_VECTORS
 #   endif
 #endif
 
