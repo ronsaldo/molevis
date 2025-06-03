@@ -1206,13 +1206,17 @@ Molevis::computeAtomsBoundingBox()
     computeSimulationBVH();
 
     simulationBoundingVolumeHierarchy.swap(renderingVolumeHierarchy);
-    for(size_t i = 0;i < simulationAtomDoubleState.size(); ++i)
+    if(useSingleFloats)
     {
-        if(useSingleFloats)
+        for(size_t i = 0; i < simulationAtomSingleState.size(); ++i)
             renderingAtomRenderingState[i] = simulationAtomSingleState[i].asRenderingState();
-        else
+    }
+    else
+    {
+        for(size_t i = 0; i < simulationAtomDoubleState.size(); ++i)
             renderingAtomRenderingState[i] = simulationAtomDoubleState[i].asRenderingState();
     }
+
 
 }
 
@@ -1663,7 +1667,7 @@ Molevis::simulateIterationInCPUWithFloats(float timestep)
             if(dist < lennardJonesCutoff)
             {
                 auto normalizedDirection = direction / dist;
-                auto force = -normalizedDirection * lennardJonesDerivative(dist, lennardJonesSigma, lennardJonesEpsilon);
+                auto force = -normalizedDirection * lennardJonesSingleDerivative(dist, lennardJonesSigma, lennardJonesEpsilon);
                 firstAtomState.netForce = firstAtomState.netForce + force;
             }
         }
@@ -1692,7 +1696,7 @@ Molevis::simulateIterationInCPUWithFloats(float timestep)
         auto direction = firstAtomState.position - secondAtomState.position;
         auto distance = direction.length();
         auto normalizedDirection = direction / distance;
-        auto force = -normalizedDirection*hookPotentialDerivative(distance, bond.equilibriumDistance, 100.0);
+        auto force = -normalizedDirection*hookPotentialSingleDerivative(distance, bond.equilibriumDistance, 100.0);
         firstAtomState.netForce = firstAtomState.netForce + force;
         secondAtomState.netForce = secondAtomState.netForce - force;
     }
@@ -1792,7 +1796,7 @@ Molevis::simulateIterationInCPUWithDoubles(double timestep)
             if(dist < lennardJonesCutoff)
             {
                 auto normalizedDirection = direction / dist;
-                auto force = -normalizedDirection * lennardJonesDerivative(dist, lennardJonesSigma, lennardJonesEpsilon);
+                auto force = -normalizedDirection * lennardJonesDoubleDerivative(dist, lennardJonesSigma, lennardJonesEpsilon);
                 firstAtomState.netForce = firstAtomState.netForce + force;
             }
         };
@@ -1831,7 +1835,7 @@ Molevis::simulateIterationInCPUWithDoubles(double timestep)
         auto direction = firstAtomState.position - secondAtomState.position;
         auto distance = direction.length();
         auto normalizedDirection = direction / distance;
-        auto force = -normalizedDirection*hookPotentialDerivative(distance, bond.equilibriumDistance, 100.0);
+        auto force = -normalizedDirection*hookPotentialDoubleDerivative(distance, bond.equilibriumDistance, 100.0);
         firstAtomState.netForce = firstAtomState.netForce + force;
         secondAtomState.netForce = secondAtomState.netForce - force;
     }

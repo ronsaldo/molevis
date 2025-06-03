@@ -114,7 +114,7 @@ void computeLennardJonesForce(int atomCount, AtomDescription *atomDescriptions, 
                     direction.z / dist
                 );
 
-                double derivative = lennardJonesDerivative(dist, lennardJonesSigma, lennardJonesEpsilon);
+                double derivative = lennardJonesDoubleDerivative(dist, lennardJonesSigma, lennardJonesEpsilon);
                 double3 force = make_double3(
                     -normalizedDirection.x * derivative,
                     -normalizedDirection.y * derivative,
@@ -157,7 +157,7 @@ void computeBondForce(int bondCount, AtomBondDescription *atomBondDescriptions, 
             direction.z / distance
         );
 
-        double hookPotentialDer = hookPotentialDerivative(distance, bond.equilibriumDistance, 100.0);
+        double hookPotentialDer = hookPotentialDoubleDerivative(distance, bond.equilibriumDistance, 100.0);
         double3 force = make_double3(
             -normalizedDirection.x*hookPotentialDer,
             -normalizedDirection.y*hookPotentialDer,

@@ -10,6 +10,27 @@ const double SimulationTimeStep = 1e-3f; // Picoseconds
 const double BoltzmannConstantSI = 1.380649e-23; // m^2.K^-1
 const double TargetTemperature = 10; // Kelvin
 
+__host__ __device__ inline float quickFPow6(float base)
+{
+    return (base*base)*(base*base)*(base*base);
+}
+
+__host__ __device__ inline float quickFPow7(float base)
+{
+    return quickFPow6(base)*base;
+}
+
+__host__ __device__ inline float quickFPow12(float base)
+{
+    auto result = quickFPow6(base);
+    return result*result;
+}
+
+__host__ __device__ inline float quickFPow13(float base)
+{
+    return quickFPow12(base)*base;
+}
+
 __host__ __device__ inline double quickDPow6(double base)
 {
     return (base*base)*(base*base)*(base*base);
@@ -32,16 +53,29 @@ __host__ __device__ inline double quickDPow13(double base)
 }
 
 inline double
-lennardJonesPotential(double r, double sigma, double epsilon)
+lennardJonesDoublePotential(double r, double sigma, double epsilon)
 {
     return 4*epsilon*(quickDPow12(sigma/r) - quickDPow6(sigma/r));
 }
 
 inline __host__ __device__ double
-lennardJonesDerivative(double r, double sigma, double epsilon)
+lennardJonesDoubleDerivative(double r, double sigma, double epsilon)
 {
     return 24*epsilon*(quickDPow6(sigma)/quickDPow7(r) - 2.0*quickDPow12(sigma)/quickDPow13(r));
 }
+
+inline float
+lennardJonesSinglePotential(float r, float sigma, float epsilon)
+{
+    return 4*epsilon*(quickFPow12(sigma/r) - quickFPow6(sigma/r));
+}
+
+inline __host__ __device__ float
+lennardJonesSingleDerivative(float r, float sigma, float epsilon)
+{
+    return 24*epsilon*(quickFPow6(sigma)/quickFPow7(r) - 2.0*quickFPow12(sigma)/quickFPow13(r));
+}
+
 
 inline double
 morsePotential(double r, double De, double a, double re)
@@ -58,16 +92,30 @@ morsePotentialDerivative(double r, double De, double a, double re)
 }
 
 inline double
-hookPotential(double distance, double equilibriumDistance, double k)
+hookPotentialDouble(double distance, double equilibriumDistance, double k)
 {
     double delta = distance - equilibriumDistance;
     return 0.5*k * (delta*delta);
 }
 
 inline __host__ __device__ double
-hookPotentialDerivative(double distance, double equilibriumDistance, double k)
+hookPotentialDoubleDerivative(double distance, double equilibriumDistance, double k)
 {
     double delta = distance - equilibriumDistance;
+    return k * delta;
+}
+
+inline double
+hookPotentialSingle(float distance, float equilibriumDistance, float k)
+{
+    float delta = distance - equilibriumDistance;
+    return 0.5*k * (delta*delta);
+}
+
+inline __host__ __device__ float
+hookPotentialSingleDerivative(float distance, float equilibriumDistance, float k)
+{
+    float delta = distance - equilibriumDistance;
     return k * delta;
 }
 
