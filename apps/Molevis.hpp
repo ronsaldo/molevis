@@ -197,7 +197,8 @@ public:
     void beginLayout(float x = 5, float y = 5);
     void advanceLayoutRow();
 
-    void simulateIterationWithCuda(double timestep);
+    void simulateIterationWithCudaUsingFloats(float timestep);
+    void simulateIterationWithCudaUsingDoubles(double timestep);
     void computeSimulationBVH();
     void simulateIterationInCPUWithFloats(float timestep);
     void simulateIterationInCPUWithDoubles(double timestep);
@@ -304,10 +305,14 @@ public:
 
     AtomDescription *cudaAtomDescriptions = nullptr;
     AtomBondDescription *cudaAtomBondDescriptions = nullptr;
-    AtomSimulationDoubleState *cudaSimulationAtomRenderingState = nullptr;
+    AtomSimulationSingleState *cudaSimulationSingleAtomRenderingState = nullptr;
+    AtomSimulationDoubleState *cudaSimulationDoubleAtomRenderingState = nullptr;
 
-    double *cudaKineticEnergyFrontBuffer = nullptr;
-    double *cudaKineticEnergyBackBuffer = nullptr;
+    float *cudaKineticEnergySingleFrontBuffer = nullptr;
+    float *cudaKineticEnergySingleBackBuffer = nullptr;
+
+    double *cudaKineticEnergyDoubleFrontBuffer = nullptr;
+    double *cudaKineticEnergyDoubleBackBuffer = nullptr;
 
     std::mutex renderingAtomRenderingStateMutex;
     std::vector<AtomRenderingState> renderingAtomRenderingState;

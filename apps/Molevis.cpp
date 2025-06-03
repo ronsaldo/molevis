@@ -1521,7 +1521,66 @@ Molevis::advanceLayoutRow()
 }
 
 void
-Molevis::simulateIterationWithCuda(double timestep)
+Molevis::simulateIterationWithCudaUsingFloats(float timestep)
+{  
+    if (!cudaAtomDescriptions)
+    {
+        size_t bufferSize = atomDescriptions.size()*sizeof(AtomDescription);
+        cudaMalloc((void**)&cudaAtomDescriptions, bufferSize);
+        cudaMemcpy(cudaAtomDescriptions, atomDescriptions.data(), bufferSize, cudaMemcpyHostToDevice);
+    }
+
+    if (!cudaAtomBondDescriptions)
+    {
+        size_t bufferSize = atomBondDescriptions.size()*sizeof(AtomBondDescription);
+        cudaMalloc((void**)&cudaAtomBondDescriptions, bufferSize);
+        cudaMemcpy(cudaAtomBondDescriptions, atomBondDescriptions.data(), bufferSize, cudaMemcpyHostToDevice);
+    }
+
+    size_t simulationStateBufferSize = simulationAtomSingleState.size()*sizeof(AtomSimulationSingleState);
+    if (!cudaSimulationSingleAtomRenderingState)
+    {
+        cudaMalloc((void**)&cudaSimulationSingleAtomRenderingState, simulationStateBufferSize);
+        cudaMemcpy(cudaSimulationSingleAtomRenderingState, simulationAtomSingleState.data(), simulationStateBufferSize, cudaMemcpyHostToDevice);
+    }
+
+    if(!cudaKineticEnergySingleFrontBuffer)
+    {
+        size_t bufferSize = simulationAtomSingleState.size()*sizeof(double);
+        cudaMalloc((void**)&cudaKineticEnergySingleFrontBuffer, bufferSize);
+        cudaMalloc((void**)&cudaKineticEnergySingleBackBuffer, bufferSize);
+    }
+
+    // Simulation step.
+    performCudaSingleSimulationStep(
+        atomDescriptions.size(), cudaAtomDescriptions,
+        atomBondDescriptions.size(), cudaAtomBondDescriptions,
+        simulationAtomSingleState.size(), cudaSimulationSingleAtomRenderingState,
+        cudaKineticEnergySingleFrontBuffer, cudaKineticEnergySingleBackBuffer
+    );
+
+    // Readback result.
+    cudaMemcpy(simulationAtomSingleState.data(), cudaSimulationSingleAtomRenderingState, simulationStateBufferSize, cudaMemcpyDeviceToHost);
+    auto cudaError = cudaDeviceSynchronize();
+    if(cudaError)
+    {
+        fprintf(stderr, "Cuda error: %d\n", cudaError);
+        return;
+    }
+
+    // Upload the new state
+    {
+        std::unique_lock l(renderingAtomRenderingStateMutex);
+        for(size_t i = 0; i < simulationAtomSingleState.size(); ++i)
+            renderingAtomRenderingState[i] = simulationAtomSingleState[i].asRenderingState();
+        renderingAtomRenderingStateDirty = true;
+    }
+
+    simulationIteration.fetch_add(1);
+}
+
+void
+Molevis::simulateIterationWithCudaUsingDoubles(double timestep)
 {  
     if (!cudaAtomDescriptions)
     {
@@ -1538,29 +1597,29 @@ Molevis::simulateIterationWithCuda(double timestep)
     }
 
     size_t simulationStateBufferSize = simulationAtomDoubleState.size()*sizeof(AtomSimulationDoubleState);
-    if (!cudaSimulationAtomRenderingState)
+    if (!cudaSimulationDoubleAtomRenderingState)
     {
-        cudaMalloc((void**)&cudaSimulationAtomRenderingState, simulationStateBufferSize);
-        cudaMemcpy(cudaSimulationAtomRenderingState, simulationAtomDoubleState.data(), simulationStateBufferSize, cudaMemcpyHostToDevice);
+        cudaMalloc((void**)&cudaSimulationDoubleAtomRenderingState, simulationStateBufferSize);
+        cudaMemcpy(cudaSimulationDoubleAtomRenderingState, simulationAtomDoubleState.data(), simulationStateBufferSize, cudaMemcpyHostToDevice);
     }
 
-    if(!cudaKineticEnergyFrontBuffer)
+    if(!cudaKineticEnergyDoubleFrontBuffer)
     {
         size_t bufferSize = simulationAtomDoubleState.size()*sizeof(double);
-        cudaMalloc((void**)&cudaKineticEnergyFrontBuffer, bufferSize);
-        cudaMalloc((void**)&cudaKineticEnergyBackBuffer, bufferSize);
+        cudaMalloc((void**)&cudaKineticEnergyDoubleFrontBuffer, bufferSize);
+        cudaMalloc((void**)&cudaKineticEnergyDoubleBackBuffer, bufferSize);
     }
 
     // Simulation step.
-    performCudaSimulationStep(
+    performCudaDoubleSimulationStep(
         atomDescriptions.size(), cudaAtomDescriptions,
         atomBondDescriptions.size(), cudaAtomBondDescriptions,
-        simulationAtomDoubleState.size(), cudaSimulationAtomRenderingState,
-        cudaKineticEnergyFrontBuffer, cudaKineticEnergyBackBuffer
+        simulationAtomDoubleState.size(), cudaSimulationDoubleAtomRenderingState,
+        cudaKineticEnergyDoubleFrontBuffer, cudaKineticEnergyDoubleBackBuffer
     );
 
     // Readback result.
-    cudaMemcpy(simulationAtomDoubleState.data(), cudaSimulationAtomRenderingState, simulationStateBufferSize, cudaMemcpyDeviceToHost);
+    cudaMemcpy(simulationAtomDoubleState.data(), cudaSimulationDoubleAtomRenderingState, simulationStateBufferSize, cudaMemcpyDeviceToHost);
     auto cudaError = cudaDeviceSynchronize();
     if(cudaError)
     {
@@ -1910,7 +1969,10 @@ Molevis::simulationThreadEntry()
             auto iterationStartTime = getMicroseconds();
             if(useCUDA)
             {
-                simulateIterationWithCuda(SimulationTimeStep);
+                if(useSingleFloats)
+                    simulateIterationWithCudaUsingFloats(SimulationTimeStep);
+                else
+                    simulateIterationWithCudaUsingDoubles(SimulationTimeStep);
             }
             else
             {
