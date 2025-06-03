@@ -10,37 +10,37 @@ const double SimulationTimeStep = 1e-3f; // Picoseconds
 const double BoltzmannConstantSI = 1.380649e-23; // m^2.K^-1
 const double TargetTemperature = 10; // Kelvin
 
-__host__ __device__ inline double quickPow6(double base)
+__host__ __device__ inline double quickDPow6(double base)
 {
     return (base*base)*(base*base)*(base*base);
 }
 
-__host__ __device__ inline double quickPow7(double base)
+__host__ __device__ inline double quickDPow7(double base)
 {
-    return quickPow6(base)*base;
+    return quickDPow6(base)*base;
 }
 
-__host__ __device__ inline double quickPow12(double base)
+__host__ __device__ inline double quickDPow12(double base)
 {
-    auto result = quickPow6(base);
+    auto result = quickDPow6(base);
     return result*result;
 }
 
-__host__ __device__ inline double quickPow13(double base)
+__host__ __device__ inline double quickDPow13(double base)
 {
-    return quickPow12(base)*base;
+    return quickDPow12(base)*base;
 }
 
 inline double
 lennardJonesPotential(double r, double sigma, double epsilon)
 {
-    return 4*epsilon*(quickPow12(sigma/r) - quickPow6(sigma/r));
+    return 4*epsilon*(quickDPow12(sigma/r) - quickDPow6(sigma/r));
 }
 
 inline __host__ __device__ double
 lennardJonesDerivative(double r, double sigma, double epsilon)
 {
-    return 24*epsilon*(quickPow6(sigma)/quickPow7(r) - 2.0*quickPow12(sigma)/quickPow13(r));
+    return 24*epsilon*(quickDPow6(sigma)/quickDPow7(r) - 2.0*quickDPow12(sigma)/quickDPow13(r));
 }
 
 inline double

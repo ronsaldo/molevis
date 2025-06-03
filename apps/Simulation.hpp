@@ -10,7 +10,7 @@
 void performCudaSimulationStep(
     int atomDescriptionCount, AtomDescription *deviceAtomDescriptions,
     int atomBondDescriptionCount, AtomBondDescription *atomBondDescriptions,
-    int atomStateSize, AtomSimulationState *atomStates,
+    int atomStateSize, AtomSimulationDoubleState *atomStates,
     double *kineticEnergyFrontBuffer, double *kineticEnergyBackBuffer
 );
 

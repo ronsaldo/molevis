@@ -2,7 +2,7 @@
 #include <assert.h>
 
 __global__
-void resetNetForces(int atomCount, AtomSimulationState *atomStates)
+void resetNetForces(int atomCount, AtomSimulationDoubleState *atomStates)
 {
     int index = blockIdx.x*blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
@@ -16,7 +16,7 @@ void resetNetForces(int atomCount, AtomSimulationState *atomStates)
 }
 
 __global__
-void integrateNetForces(int atomCount, AtomDescription *atomDescriptions, AtomSimulationState *atomStates, double timeStep)
+void integrateNetForces(int atomCount, AtomDescription *atomDescriptions, AtomSimulationDoubleState *atomStates, double timeStep)
 {
     int index = blockIdx.x*blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
@@ -40,7 +40,7 @@ void integrateNetForces(int atomCount, AtomDescription *atomDescriptions, AtomSi
 }
 
 __global__
-void integrateVelocities(int atomCount, AtomDescription *atomDescriptions, AtomSimulationState *atomStates, double timeStep)
+void integrateVelocities(int atomCount, AtomDescription *atomDescriptions, AtomSimulationDoubleState *atomStates, double timeStep)
 {
     int index = blockIdx.x*blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
@@ -64,7 +64,7 @@ void integrateVelocities(int atomCount, AtomDescription *atomDescriptions, AtomS
 }
 
 __global__
-void computeLennardJonesForce(int atomCount, AtomDescription *atomDescriptions, AtomSimulationState *atomStates)
+void computeLennardJonesForce(int atomCount, AtomDescription *atomDescriptions, AtomSimulationDoubleState *atomStates)
 {
     int index = blockIdx.x*blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
@@ -72,7 +72,7 @@ void computeLennardJonesForce(int atomCount, AtomDescription *atomDescriptions, 
     for(int i = index; i < atomCount; i += stride)
     {
         AtomDescription &firstAtomDesc = atomDescriptions[i];
-        AtomSimulationState &firstAtomRenderingState = atomStates[i];
+        AtomSimulationDoubleState &firstAtomRenderingState = atomStates[i];
 
         double3 netForce = make_double3(atomStates[i].netForce.x, atomStates[i].netForce.y, atomStates[i].netForce.z);
         double3 firstPosition = make_double3(firstAtomRenderingState.position.x, firstAtomRenderingState.position.y, firstAtomRenderingState.position.z);
@@ -87,7 +87,7 @@ void computeLennardJonesForce(int atomCount, AtomDescription *atomDescriptions, 
                 continue;
 
             AtomDescription &secondAtomDesc = atomDescriptions[j];
-            AtomSimulationState &secondAtomRenderingState = atomStates[j];
+            AtomSimulationDoubleState &secondAtomRenderingState = atomStates[j];
 
             double3 secondPosition = make_double3(secondAtomRenderingState.position.x, secondAtomRenderingState.position.y, secondAtomRenderingState.position.z);
 
@@ -134,7 +134,7 @@ void computeLennardJonesForce(int atomCount, AtomDescription *atomDescriptions, 
 }
 
 __global__
-void computeBondForce(int bondCount, AtomBondDescription *atomBondDescriptions, AtomSimulationState *atomStates)
+void computeBondForce(int bondCount, AtomBondDescription *atomBondDescriptions, AtomSimulationDoubleState *atomStates)
 {
     int index = blockIdx.x*blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
@@ -142,8 +142,8 @@ void computeBondForce(int bondCount, AtomBondDescription *atomBondDescriptions, 
     for(int i = index; i < bondCount; i += stride)
     {
         AtomBondDescription &bond = atomBondDescriptions[i];
-        AtomSimulationState &firstAtomRenderingState = atomStates[bond.firstAtomIndex];
-        AtomSimulationState &secondAtomRenderingState = atomStates[bond.secondAtomIndex];
+        AtomSimulationDoubleState &firstAtomRenderingState = atomStates[bond.firstAtomIndex];
+        AtomSimulationDoubleState &secondAtomRenderingState = atomStates[bond.secondAtomIndex];
 
         double3 direction = make_double3(
             firstAtomRenderingState.position.x - secondAtomRenderingState.position.x,
@@ -175,7 +175,7 @@ void computeBondForce(int bondCount, AtomBondDescription *atomBondDescriptions, 
 }
 
 __global__
-void computeKineticEnergy(int atomCount, AtomDescription *atomDescriptions, AtomSimulationState *atomStates, double *kineticEnergies)
+void computeKineticEnergy(int atomCount, AtomDescription *atomDescriptions, AtomSimulationDoubleState *atomStates, double *kineticEnergies)
 {
     int index = blockIdx.x*blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
@@ -183,7 +183,7 @@ void computeKineticEnergy(int atomCount, AtomDescription *atomDescriptions, Atom
     for(int i = index; i < atomCount; i += stride)
     {
         AtomDescription &atomDesc = atomDescriptions[i];
-        AtomSimulationState &atomState = atomStates[i];
+        AtomSimulationDoubleState &atomState = atomStates[i];
 
         double kineticEnergy = 0.5*atomDesc.mass * (
             atomState.velocity.x*atomState.velocity.x +
@@ -204,7 +204,7 @@ void kineticEnergySum(int atomCount, double *kineticEnergies)
 }
 
 __global__
-void scaleVelocities(int atomCount, AtomSimulationState *atomStates, double *kineticEnergies, double targetKineticEnergy)
+void scaleVelocities(int atomCount, AtomSimulationDoubleState *atomStates, double *kineticEnergies, double targetKineticEnergy)
 {
     double kineticEnergyLambda = targetKineticEnergy / max(0.01, kineticEnergies[0]);
 
@@ -213,7 +213,7 @@ void scaleVelocities(int atomCount, AtomSimulationState *atomStates, double *kin
 
     for(int i = index; i < atomCount; i += stride)
     {
-        AtomSimulationState &atomState = atomStates[i];
+        AtomSimulationDoubleState &atomState = atomStates[i];
         atomState.velocity.x *= kineticEnergyLambda;
         atomState.velocity.y *= kineticEnergyLambda;
         atomState.velocity.z *= kineticEnergyLambda;
@@ -223,7 +223,7 @@ void scaleVelocities(int atomCount, AtomSimulationState *atomStates, double *kin
 void performCudaSimulationStep(
     int atomDescriptionCount, AtomDescription *atomDescriptions,
     int atomBondDescriptionCount, AtomBondDescription *atomBondDescriptions,
-    int atomStateSize, AtomSimulationState *atomStates,
+    int atomStateSize, AtomSimulationDoubleState *atomStates,
     double *kineticEnergyFrontBuffer, double *kineticEnergyBackBuffer
 )
 {

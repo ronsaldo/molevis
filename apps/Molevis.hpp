@@ -157,7 +157,8 @@ public:
     void generateTestDataset();
     void generateRandomDataset(size_t atomsToGenerate, size_t bondsToGenerate);
 
-    DAABox atomsBoundingBox;
+    AABox atomsSingleBoundingBox;
+    DAABox atomsDoubleBoundingBox;
 
     void computeAtomsBoundingBox();
 
@@ -198,7 +199,8 @@ public:
 
     void simulateIterationWithCuda(double timestep);
     void computeSimulationBVH();
-    void simulateIterationInCPU(double timestep);
+    void simulateIterationInCPUWithFloats(float timestep);
+    void simulateIterationInCPUWithDoubles(double timestep);
     void simulationThreadEntry();
     void startSimulationThread();
 
@@ -296,12 +298,13 @@ public:
 
     std::vector<AtomDescription> atomDescriptions; 
     std::vector<AtomBondDescription> atomBondDescriptions; 
-    std::vector<AtomSimulationState> simulationAtomRenderingState;
+    std::vector<AtomSimulationDoubleState> simulationAtomDoubleState;
+    std::vector<AtomSimulationSingleState> simulationAtomSingleState;
     DBVH simulationBoundingVolumeHierarchy;
 
     AtomDescription *cudaAtomDescriptions = nullptr;
     AtomBondDescription *cudaAtomBondDescriptions = nullptr;
-    AtomSimulationState *cudaSimulationAtomRenderingState = nullptr;
+    AtomSimulationDoubleState *cudaSimulationAtomRenderingState = nullptr;
 
     double *cudaKineticEnergyFrontBuffer = nullptr;
     double *cudaKineticEnergyBackBuffer = nullptr;
@@ -356,6 +359,7 @@ public:
     std::atomic_long simulationTime = 0;
     bool useCUDA = false;
     bool useBVH = false;
+    bool useSingleFloats = false;
 
     bool hasWheelEvent = false;
     bool hasHandledWheelEvent = false;
