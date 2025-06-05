@@ -203,9 +203,10 @@ void kineticDoubleEnergySum(int atomCount, double *kineticEnergies)
 }
 
 __global__
-void scaleDoubleVelocities(int atomCount, AtomSimulationDoubleState *atomStates, double *kineticEnergies, double targetKineticEnergy)
+void scaleDoubleVelocities(int atomCount, AtomSimulationDoubleState *atomStates, double *kineticEnergies, double targetTemperature)
 {
-    double kineticEnergyLambda = targetKineticEnergy / max(0.01, kineticEnergies[0]);
+    double currentTemperature = averageKineticEnergyToTemperatureDouble(kineticEnergies[0]);
+    double kineticEnergyLambda = sqrt(targetTemperature / max(1e-6, currentTemperature));
 
     int index = blockIdx.x*blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
@@ -223,7 +224,8 @@ void performCudaDoubleSimulationStep(
     int atomDescriptionCount, AtomDescription *atomDescriptions,
     int atomBondDescriptionCount, AtomBondDescription *atomBondDescriptions,
     int atomStateSize, AtomSimulationDoubleState *atomStates,
-    double *kineticEnergyFrontBuffer, double *kineticEnergyBackBuffer
+    double *kineticEnergyFrontBuffer, double *kineticEnergyBackBuffer,
+    double targetTemperature
 )
 {
     assert(atomDescriptionCount == atomStateSize);
@@ -253,7 +255,7 @@ void performCudaDoubleSimulationStep(
     kineticDoubleEnergySum<<<atomStateSize, 1>>> (atomStateSize, kineticEnergyFrontBuffer);
 
     // Scale the velocities
-    scaleDoubleVelocities<<<blockCount, blockSize>>> (atomStateSize, atomStates, kineticEnergyFrontBuffer, 1.0);
+    scaleDoubleVelocities<<<blockCount, blockSize>>> (atomStateSize, atomStates, kineticEnergyFrontBuffer, targetTemperature);
 
     // Integrate velocities
     integrateDoubleVelocities<<<blockCount, blockSize>>> (atomStateSize, atomDescriptions, atomStates, SimulationTimeStep);
@@ -461,9 +463,10 @@ void kineticFloatEnergySum(int atomCount, float *kineticEnergies)
 }
 
 __global__
-void scaleFloatVelocities(int atomCount, AtomSimulationSingleState *atomStates, float *kineticEnergies, float targetKineticEnergy)
+void scaleFloatVelocities(int atomCount, AtomSimulationSingleState *atomStates, float *kineticEnergies, float targetTemperature)
 {
-    float kineticEnergyLambda = targetKineticEnergy / max(0.01, kineticEnergies[0]);
+    float currentTemperature = averageKineticEnergyToTemperatureFloat(kineticEnergies[0]);
+    float kineticEnergyLambda = sqrt(targetTemperature / max(1e-6, currentTemperature));
 
     int index = blockIdx.x*blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
@@ -481,7 +484,8 @@ void performCudaSingleSimulationStep(
     int atomDescriptionCount, AtomDescription *atomDescriptions,
     int atomBondDescriptionCount, AtomBondDescription *atomBondDescriptions,
     int atomStateSize, AtomSimulationSingleState *atomStates,
-    float *kineticEnergyFrontBuffer, float *kineticEnergyBackBuffer
+    float *kineticEnergyFrontBuffer, float *kineticEnergyBackBuffer,
+    float targetTemperature
 )
 {
     assert(atomDescriptionCount == atomStateSize);
@@ -511,7 +515,7 @@ void performCudaSingleSimulationStep(
     kineticFloatEnergySum<<<atomStateSize, 1>>> (atomStateSize, kineticEnergyFrontBuffer);
 
     // Scale the velocities
-    scaleFloatVelocities<<<blockCount, blockSize>>> (atomStateSize, atomStates, kineticEnergyFrontBuffer, 1.0);
+    scaleFloatVelocities<<<blockCount, blockSize>>> (atomStateSize, atomStates, kineticEnergyFrontBuffer, targetTemperature);
 
     // Integrate velocities
     integrateFloatVelocities<<<blockCount, blockSize>>> (atomStateSize, atomDescriptions, atomStates, SimulationTimeStep);

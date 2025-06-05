@@ -11,14 +11,16 @@ void performCudaSingleSimulationStep(
     int atomDescriptionCount, AtomDescription *deviceAtomDescriptions,
     int atomBondDescriptionCount, AtomBondDescription *atomBondDescriptions,
     int atomStateSize, AtomSimulationSingleState *atomStates,
-    float *kineticEnergyFrontBuffer, float *kineticEnergyBackBuffer
+    float *kineticEnergyFrontBuffer, float *kineticEnergyBackBuffer,
+    float targetTemperature
 );
 
 void performCudaDoubleSimulationStep(
     int atomDescriptionCount, AtomDescription *deviceAtomDescriptions,
     int atomBondDescriptionCount, AtomBondDescription *atomBondDescriptions,
     int atomStateSize, AtomSimulationDoubleState *atomStates,
-    double *kineticEnergyFrontBuffer, double *kineticEnergyBackBuffer
+    double *kineticEnergyFrontBuffer, double *kineticEnergyBackBuffer,
+    double targetTemperature
 );
 
 #endif //SIMULATION_HPP

@@ -127,6 +127,10 @@ Molevis::mainStart(int argc, const char *argv[])
             {
                 useSingleFloats = true;
             }
+            else if (arg == "-temp")
+            {
+                targetTemperature = atof(argv[++i]);
+            }
         }
         else
         {
@@ -1556,7 +1560,8 @@ Molevis::simulateIterationWithCudaUsingFloats(float timestep)
         atomDescriptions.size(), cudaAtomDescriptions,
         atomBondDescriptions.size(), cudaAtomBondDescriptions,
         simulationAtomSingleState.size(), cudaSimulationSingleAtomRenderingState,
-        cudaKineticEnergySingleFrontBuffer, cudaKineticEnergySingleBackBuffer
+        cudaKineticEnergySingleFrontBuffer, cudaKineticEnergySingleBackBuffer,
+        targetTemperature
     );
 
     // Readback result.
@@ -1615,7 +1620,8 @@ Molevis::simulateIterationWithCudaUsingDoubles(double timestep)
         atomDescriptions.size(), cudaAtomDescriptions,
         atomBondDescriptions.size(), cudaAtomBondDescriptions,
         simulationAtomDoubleState.size(), cudaSimulationDoubleAtomRenderingState,
-        cudaKineticEnergyDoubleFrontBuffer, cudaKineticEnergyDoubleBackBuffer
+        cudaKineticEnergyDoubleFrontBuffer, cudaKineticEnergyDoubleBackBuffer,
+        targetTemperature
     );
 
     // Readback result.
@@ -1776,8 +1782,8 @@ Molevis::simulateIterationInCPUWithFloats(float timestep)
     float averageKineticEnergy = totalKineticEnergy / float(simulationAtomSingleState.size());
     //printf("total kinetic %f average %f\n", totalKineticEnergy, averageKineticEnergy);
 
-    float targetKineticEnergy = 1.0;
-    float kineticEnergyLambda = targetKineticEnergy / std::max(0.01f, averageKineticEnergy);
+    float currentTemperature = averageKineticEnergyToTemperatureFloat(averageKineticEnergy);
+    float kineticEnergyLambda = sqrt(targetTemperature / std::max(currentTemperature, 1e-6f));
     //float kineticEnergyLambda = 1.0;
     //printf("lambda %f\n", kineticEnergyLambda);
     
@@ -1915,8 +1921,9 @@ Molevis::simulateIterationInCPUWithDoubles(double timestep)
     double averageKineticEnergy = totalKineticEnergy / double(simulationAtomDoubleState.size());
     //printf("total kinetic %f average %f\n", totalKineticEnergy, averageKineticEnergy);
 
-    double targetKineticEnergy = 1.0;
-    double kineticEnergyLambda = targetKineticEnergy / std::max(0.01, averageKineticEnergy);
+    double currentTemperature = averageKineticEnergyToTemperatureFloat(averageKineticEnergy);
+    double kineticEnergyLambda = sqrt(targetTemperature / std::max(currentTemperature, 1e-6));
+
     //double kineticEnergyLambda = 1.0;
     //printf("lambda %f\n", kineticEnergyLambda);
     

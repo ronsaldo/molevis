@@ -7,8 +7,14 @@
 
 // Units simulationTimeStep
 const double SimulationTimeStep = 1e-3f; // Picoseconds
-const double BoltzmannConstantSI = 1.380649e-23; // m^2.K^-1
+const double BoltzmannConstant = 0.8314459920816467; // Constant from https://github.com/PolymerTheory/MDFromScratch/blob/main/MDFS.ipynb
+const double AvogadroNumber = 6.0221409e+26; // Constant from https://github.com/PolymerTheory/MDFromScratch/blob/main/MDFS.ipynb
 const double TargetTemperature = 10; // Kelvin
+
+__host__ __device__ inline float averageKineticEnergyToTemperatureFloat(float kineticEnergy)
+{
+    return (2.0/3.0) * kineticEnergy / float(BoltzmannConstant);
+}
 
 __host__ __device__ inline float quickFPow6(float base)
 {
@@ -29,6 +35,11 @@ __host__ __device__ inline float quickFPow12(float base)
 __host__ __device__ inline float quickFPow13(float base)
 {
     return quickFPow12(base)*base;
+}
+
+__host__ __device__ inline double averageKineticEnergyToTemperatureDouble(double kineticEnergy)
+{
+    return (2.0/3.0) * kineticEnergy / BoltzmannConstant;
 }
 
 __host__ __device__ inline double quickDPow6(double base)

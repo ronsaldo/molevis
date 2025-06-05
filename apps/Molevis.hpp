@@ -359,6 +359,8 @@ public:
     Vector3 modelPosition = Vector3(0, 0, 0);
     float modelScaleFactor = 0.1f;
 
+    float targetTemperature = 1.0f;
+
     std::atomic_bool isSimulating = true;
     std::atomic_int simulationIteration = 0;
     std::atomic_long simulationTime = 0;
