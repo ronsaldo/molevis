@@ -197,8 +197,10 @@ public:
     void beginLayout(float x = 5, float y = 5);
     void advanceLayoutRow();
 
+#ifdef USE_CUDA
     void simulateIterationWithCudaUsingFloats(float timestep);
     void simulateIterationWithCudaUsingDoubles(double timestep);
+#endif
     void computeSimulationBVH();
     void simulateIterationInCPUWithFloats(float timestep);
     void simulateIterationInCPUWithDoubles(double timestep);
@@ -303,6 +305,8 @@ public:
     std::vector<AtomSimulationSingleState> simulationAtomSingleState;
     DBVH simulationBoundingVolumeHierarchy;
 
+#ifdef USE_CUDA
+    bool useCUDA = false;
     AtomDescription *cudaAtomDescriptions = nullptr;
     AtomBondDescription *cudaAtomBondDescriptions = nullptr;
     AtomSimulationSingleState *cudaSimulationSingleAtomRenderingState = nullptr;
@@ -313,6 +317,7 @@ public:
 
     double *cudaKineticEnergyDoubleFrontBuffer = nullptr;
     double *cudaKineticEnergyDoubleBackBuffer = nullptr;
+#endif
 
     std::mutex renderingAtomRenderingStateMutex;
     std::vector<AtomRenderingState> renderingAtomRenderingState;
@@ -364,7 +369,6 @@ public:
     std::atomic_bool isSimulating = true;
     std::atomic_int simulationIteration = 0;
     std::atomic_long simulationTime = 0;
-    bool useCUDA = false;
     bool useBVH = false;
     bool useSingleFloats = false;
 

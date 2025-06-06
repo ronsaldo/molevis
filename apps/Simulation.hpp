@@ -5,6 +5,8 @@
 #include "AtomDescription.hpp"
 #include "AtomBondDescription.hpp"
 #include "AtomState.hpp"
+
+#ifdef USE_CUDA
 #include "cuda_runtime_api.h"
 
 void performCudaSingleSimulationStep(
@@ -22,5 +24,5 @@ void performCudaDoubleSimulationStep(
     double *kineticEnergyFrontBuffer, double *kineticEnergyBackBuffer,
     double targetTemperature
 );
-
+#endif // USE_CUDA
 #endif //SIMULATION_HPP

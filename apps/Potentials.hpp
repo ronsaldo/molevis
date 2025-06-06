@@ -3,7 +3,12 @@
 
 #pragma once
 
-#include "cuda_runtime_api.h"
+#ifdef USE_CUDA
+#   include "cuda_runtime_api.h"
+#else
+#   define __host__
+#   define __device__
+#endif
 
 // Units simulationTimeStep
 const double SimulationTimeStep = 1e-3f; // Picoseconds

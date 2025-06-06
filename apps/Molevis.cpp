@@ -115,10 +115,12 @@ Molevis::mainStart(int argc, const char *argv[])
                 isVirtualReality = true;
                 vsyncDisabled = true;
             }
+#ifdef USE_CUDA
             else if (arg == "-use-cuda")
             {
                 useCUDA = true;
             }
+#endif
             else if (arg == "-use-bvh")
             {
                 useBVH = true;
@@ -1524,6 +1526,7 @@ Molevis::advanceLayoutRow()
     currentLayoutY = currentLayoutRowY;
 }
 
+#ifdef USE_CUDA
 void
 Molevis::simulateIterationWithCudaUsingFloats(float timestep)
 {  
@@ -1643,6 +1646,8 @@ Molevis::simulateIterationWithCudaUsingDoubles(double timestep)
 
     simulationIteration.fetch_add(1);
 }
+
+#endif // USE_CUDA
 
 void
 Molevis::computeSimulationBVH()
@@ -1974,6 +1979,7 @@ Molevis::simulationThreadEntry()
         if(shouldStepSimulation)
         {
             auto iterationStartTime = getMicroseconds();
+#ifdef USE_CUDA
             if(useCUDA)
             {
                 if(useSingleFloats)
@@ -1981,7 +1987,9 @@ Molevis::simulationThreadEntry()
                 else
                     simulateIterationWithCudaUsingDoubles(SimulationTimeStep);
             }
-            else
+            else 
+#endif
+            if(true)
             {
                 if(useSingleFloats)
                     simulateIterationInCPUWithFloats(SimulationTimeStep);
