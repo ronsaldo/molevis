@@ -63,7 +63,8 @@ Molevis::mainStart(int argc, const char *argv[])
 #endif
     agpu_uint platformIndex = 0;
     agpu_uint gpuIndex = 0;
-    int randomAtomCount = 1000;
+    bool genRandomDataset = false;
+    int randomAtomCount = 0;
     int randomBondCount = 0;
     loadPeriodicTable();
     initializeAtomColorConventions();
@@ -93,10 +94,12 @@ Molevis::mainStart(int argc, const char *argv[])
             else if (arg == "-gen-atoms")
             {
                 randomAtomCount = atoi(argv[++i]);
+                genRandomDataset = true;
             }
             else if (arg == "-gen-bonds")
             {
                 randomBondCount = atoi(argv[++i]);
+                genRandomDataset = true;
             }
             else if (arg == "-paused")
             {
@@ -151,8 +154,10 @@ Molevis::mainStart(int argc, const char *argv[])
     }
     else
     {
-        generateTestDataset();
-        //generateRandomDataset(randomAtomCount, randomBondCount);
+        if(genRandomDataset)
+            generateRandomDataset(randomAtomCount, randomBondCount);
+        else 
+            generateTestDataset();
     }
 
     // Get the platform.
@@ -428,6 +433,7 @@ Molevis::mainStart(int argc, const char *argv[])
     }
 
     // Atom bond description buffer
+    if(!atomBondDescriptions.empty())
     {
         agpu_buffer_description desc = {};
         desc.size = (sizeof(AtomBondDescription)*std::max(atomBondDescriptions.size(), size_t(1024)) + 255) & (-256);
@@ -455,7 +461,8 @@ Molevis::mainStart(int argc, const char *argv[])
 
     atomFrontBufferBinding = shaderSignature->createShaderResourceBinding(2);
     atomFrontBufferBinding->bindStorageBuffer(0, atomDescriptionBuffer);
-    atomFrontBufferBinding->bindStorageBuffer(1, atomBondDescriptionBuffer);
+    if(!atomBondDescriptions.empty())
+        atomFrontBufferBinding->bindStorageBuffer(1, atomBondDescriptionBuffer);
     atomFrontBufferBinding->bindStorageBuffer(2, atomStateFrontBuffer);
 
     // Atom bounding quad buffer
@@ -2436,11 +2443,14 @@ void Molevis::emitCommandsForEyeRendering(bool isRightEye)
     commandList->drawArrays(4, agpu_uint(atomDescriptions.size()), 0, 0);
 
     // Bonds
-    if(bondXRay)
-        commandList->usePipelineState(bondXRayDrawPipeline);
-    else
-        commandList->usePipelineState(bondDrawPipeline);
-    commandList->drawArrays(4, agpu_uint(atomBondDescriptions.size()), 0, 0);
+    if(!atomBondDescriptions.empty())
+    {
+        if(bondXRay)
+            commandList->usePipelineState(bondXRayDrawPipeline);
+        else
+            commandList->usePipelineState(bondDrawPipeline);
+        commandList->drawArrays(4, agpu_uint(atomBondDescriptions.size()), 0, 0);
+    }
 
     // Floor grid
     commandList->usePipelineState(floorGridDrawPipeline);
