@@ -1162,6 +1162,7 @@ Molevis::generateRandomDataset(size_t atomsToGenerate, size_t bondsToGenerate)
         description.color = rand.randVector4(Vector4{0.1f, 0.1f, 0.1f, 1.0f}, Vector4{0.8f, 0.8f, 0.8f, 1.0f});
         description.mass = 1.0f;
         state.position = rand.randDVector3(-10, 10);
+        singleState.position = Vector3(state.position.x, state.position.y, state.position.z);
 
         atomDescriptions.push_back(description);
         simulationAtomDoubleState.push_back(state);
