@@ -68,6 +68,8 @@ Molevis::mainStart(int argc, const char *argv[])
     int randomBondCount = 0;
     loadPeriodicTable();
     initializeAtomColorConventions();
+    std::string receiverFileName;
+    std::string ligandFileName;
     std::string inputFileName;
 
     for (int i = 1; i < argc; ++i)
@@ -105,6 +107,14 @@ Molevis::mainStart(int argc, const char *argv[])
             {
                 isSimulating.store(false);
             }
+            else if (arg == "-receiver")
+            {
+                receiverFileName = argv[++i];
+            }                
+            else if (arg == "-ligand")
+            {
+                ligandFileName = argv[++i];
+            }                
             else if (arg == "-scale-factor")
             {
                 modelScaleFactor = float(atof(argv[++i]));
@@ -143,13 +153,35 @@ Molevis::mainStart(int argc, const char *argv[])
         }
     }
 
-    if(!inputFileName.empty())
+    if(!receiverFileName.empty() || !ligandFileName.empty())
+    {
+        isSimulating.store(false);
+
+        if(!receiverFileName.empty())
+        {
+            chemfiles::Trajectory file(receiverFileName);
+            chemfiles::Frame frame = file.read();
+    
+            convertChemfileFrame(frame, true);    
+        }
+        if(!ligandFileName.empty())
+        {
+            chemfiles::Trajectory file(ligandFileName);
+            chemfiles::Frame frame = file.read();
+    
+            convertChemfileFrame(frame, false);    
+        }
+
+        computeAtomsBoundingBox();
+    }
+    else if(!inputFileName.empty())
     {
         isSimulating.store(false);
         chemfiles::Trajectory file(inputFileName);
         chemfiles::Frame frame = file.read();
 
         convertChemfileFrame(frame, false);
+        computeAtomsBoundingBox();
 
     }
     else
@@ -968,9 +1000,11 @@ Molevis::convertChemfileFrame(chemfiles::Frame &frame, bool isRigid)
 {
     Random rand;
     const auto &positions = frame.positions();
-    atomDescriptions.reserve(frame.size());
-    simulationAtomDoubleState.reserve(frame.size());
-    renderingAtomRenderingState.reserve(frame.size());
+    auto baseIndex = atomDescriptions.size();
+    atomDescriptions.reserve(baseIndex + frame.size());
+    simulationAtomSingleState.reserve(baseIndex + frame.size());
+    simulationAtomDoubleState.reserve(baseIndex + frame.size());
+    renderingAtomRenderingState.reserve(baseIndex + frame.size());
     
     for(size_t i = 0; i < positions.size(); ++i)
     {
@@ -1022,8 +1056,8 @@ Molevis::convertChemfileFrame(chemfiles::Frame &frame, bool isRigid)
     auto& topology = frame.topology();
     for(auto &bond : topology.bonds())
     {
-        auto firstAtomIndex = bond[0];
-        auto secondAtomIndex = bond[1];
+        auto firstAtomIndex = baseIndex + bond[0];
+        auto secondAtomIndex = baseIndex + bond[1];
 
         //const auto &firstAtomDesc = atomDescriptions[firstAtomIndex];
         //const auto &secondAtomDesc = atomDescriptions[secondAtomIndex];
@@ -1045,8 +1079,6 @@ Molevis::convertChemfileFrame(chemfiles::Frame &frame, bool isRigid)
         description.color = Vector4{0.8f, 0.8f, 0.8f, 1.0f};
         atomBondDescriptions.push_back(description);
     }
-
-    computeAtomsBoundingBox();
 }
 
 void
