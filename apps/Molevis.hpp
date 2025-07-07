@@ -153,7 +153,7 @@ public:
 
     Vector4 getOrCreateColorForAtomType(const std::string &type);
 
-    void convertChemfileFrame(chemfiles::Frame &frame);
+    void convertChemfileFrame(chemfiles::Frame &frame, bool isRigid);
     void generateTestDataset();
     void generateRandomDataset(size_t atomsToGenerate, size_t bondsToGenerate);
 

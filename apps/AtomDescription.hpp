@@ -12,6 +12,7 @@ struct AtomDescription
 
     float lennardJonesEpsilon;
     float lennardJonesSigma;
+    int isRigid;
 
     Vector4 color;
 };

@@ -149,7 +149,7 @@ Molevis::mainStart(int argc, const char *argv[])
         chemfiles::Trajectory file(inputFileName);
         chemfiles::Frame frame = file.read();
 
-        convertChemfileFrame(frame);
+        convertChemfileFrame(frame, false);
 
     }
     else
@@ -964,7 +964,7 @@ Molevis::getOrCreateColorForAtomType(const std::string &type)
 }
 
 void
-Molevis::convertChemfileFrame(chemfiles::Frame &frame)
+Molevis::convertChemfileFrame(chemfiles::Frame &frame, bool isRigid)
 {
     Random rand;
     const auto &positions = frame.positions();
@@ -982,6 +982,7 @@ Molevis::convertChemfileFrame(chemfiles::Frame &frame)
         auto description = AtomDescription{};
         description.atomNumber = chemAtomNumber ? int(chemAtomNumber.value()) : 1;
         description.mass = float(chemAtom.mass());
+        description.isRigid = isRigid ? 1 : 0;
         
         description.color = getOrCreateColorForAtomType(chemAtom.type());
         description.radius = 0.2f;
@@ -1159,6 +1160,7 @@ Molevis::generateRandomDataset(size_t atomsToGenerate, size_t bondsToGenerate)
         description.lennardJonesEpsilon = 1.0f;//rand.randFloat(1, 5);
         description.lennardJonesSigma = 1.0f;//rand.randFloat(1, 5);
         description.radius = 1.0f;//rand.randFloat(0.5, 2);
+        description.lennardJonesCutoff = description.lennardJonesSigma + 5;
         description.color = rand.randVector4(Vector4{0.1f, 0.1f, 0.1f, 1.0f}, Vector4{0.8f, 0.8f, 0.8f, 1.0f});
         description.mass = 1.0f;
         state.position = rand.randDVector3(-10, 10);
@@ -1714,6 +1716,8 @@ Molevis::simulateIterationInCPUWithFloats(float timestep)
     {
         auto &firstAtomDesc = atomDescriptions[i];
         auto &firstAtomState = simulationAtomSingleState[i];
+        if(firstAtomDesc.isRigid)
+            continue;
 
         Vector3 firstPosition = firstAtomState.position;
 
@@ -1770,13 +1774,17 @@ Molevis::simulateIterationInCPUWithFloats(float timestep)
     {
         auto &firstAtomState = simulationAtomSingleState[bond.firstAtomIndex];
         auto &secondAtomState = simulationAtomSingleState[bond.secondAtomIndex];
+        auto &firstAtomDesc = atomDescriptions[bond.firstAtomIndex];
+        auto &secondAtomDesc = atomDescriptions[bond.secondAtomIndex];
 
         auto direction = firstAtomState.position - secondAtomState.position;
         auto distance = direction.length();
         auto normalizedDirection = direction / distance;
         auto force = -normalizedDirection*hookPotentialSingleDerivative(distance, bond.equilibriumDistance, 100.0);
-        firstAtomState.netForce = firstAtomState.netForce + force;
-        secondAtomState.netForce = secondAtomState.netForce - force;
+        if(!firstAtomDesc.isRigid)
+            firstAtomState.netForce = firstAtomState.netForce + force;
+        if(!secondAtomDesc.isRigid)
+            secondAtomState.netForce = secondAtomState.netForce - force;
     }
 
     // Integrate the velocites and compute total kinetic energy.
