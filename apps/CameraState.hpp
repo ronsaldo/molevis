@@ -12,7 +12,7 @@ struct CameraState
     uint32_t flipVertically = false;
     float nearDistance = 0.1f;
     float farDistance = 1000.0f;
-    float padding;
+    float radiusScale = 1.0f;
 
     Matrix4x4 projectionMatrix;
     Matrix4x4 inverseProjectionMatrix;

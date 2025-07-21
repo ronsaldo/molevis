@@ -1456,6 +1456,12 @@ Molevis::onKeyDown(const SDL_KeyboardEvent &event)
     case SDLK_ESCAPE:
         isQuitting = true;
         break;
+    case SDLK_PLUS:
+        cameraState.radiusScale *= 1.1f;
+        break;
+    case SDLK_MINUS:
+        cameraState.radiusScale /= 1.1f;
+        break;
     case SDLK_KP_PLUS:
         modelScaleFactor *= 1.1f;
         break;

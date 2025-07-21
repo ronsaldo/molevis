@@ -28,7 +28,7 @@ void main()
 {
     AtomDescription desc = AtomDescriptionBuffer[inAtomIndex];
     vec3 worldCenter = (CameraState.atomModelMatrix*vec4(AtomRenderingStateBuffer[inAtomIndex].position, 1.0)).xyz;
-    vec3 worldRadiusVertex = (CameraState.atomModelMatrix*vec4(AtomRenderingStateBuffer[inAtomIndex].position + vec3(desc.radius, 0.0, 0.0), 1.0)).xyz;
+    vec3 worldRadiusVertex = (CameraState.atomModelMatrix*vec4(AtomRenderingStateBuffer[inAtomIndex].position + vec3(desc.radius*CameraState.radiusScale, 0.0, 0.0), 1.0)).xyz;
     float radius = length(worldRadiusVertex - worldCenter);
     vec3 viewCenter = (CameraState.viewMatrix*vec4(worldCenter, 1.0)).xyz;
 

@@ -7,7 +7,7 @@ layout(std140, set = 1, binding = 0) uniform CameraStateBlock
     bool flipVertically;
     float nearDistance;
     float farDistance;
-    float padding;
+    float radiusScale;
 
     mat4 projectionMatrix;
     mat4 inverseProjectionMatrix;
