@@ -2052,7 +2052,7 @@ Molevis::simulationThreadEntry()
             }
             auto iterationEndTime = getMicroseconds();
             auto iterationTime = iterationEndTime - iterationStartTime;
-            simulationTime.fetch_add(iterationTime);
+            simulationTime.store(iterationTime);
         }
     }
 
@@ -2153,10 +2153,9 @@ Molevis::updateAndRender(float delta)
     }
 
     char buffer[128];
-    double simulationTimeSeconds = double(simulationTime.load()) * 1e-6;
-    double simulationIterationsPerSecond = simulationTimeSeconds == 0 ? 0 : simulationIteration.load() / simulationTimeSeconds;
+    double simulationTimeSeconds = double(simulationTime.load())*1e-3;
     
-    snprintf(buffer, sizeof(buffer), "%d Atoms. %d Bonds. Sim iter %05d. IPS %0.5f. Frame time %0.3f ms.", int(atomDescriptions.size()), int(atomBondDescriptions.size()), simulationIteration.load(), simulationIterationsPerSecond, delta*1000.0);
+    snprintf(buffer, sizeof(buffer), "%d Atoms. %d Bonds. Sim iter %05d. Sim time %0.5f ms. Frame time %0.3f ms.", int(atomDescriptions.size()), int(atomBondDescriptions.size()), simulationIteration.load(), simulationTimeSeconds, delta*1000.0);
     drawString(buffer, Vector2{5, 5}, Vector4{0.1f, 1.0f, 0.1f, 1.0f});
 
     auto cameraInverseMatrix = cameraMatrix.transposed();
