@@ -5,16 +5,10 @@ if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
   set(CMAKE_CUDA_ARCHITECTURES 75)
 endif()
 
-if(APPLE)
-    set(MOLEVIS_LANGUAGES)
-    set(MOLEVIS_USE_CUDA OFF)
-else()
-    set(MOLEVIS_LANGUAGES C CXX CUDA)
-    set(MOLEVIS_USE_CUDA ON)
-    add_definitions(-DUSE_CUDA)
-endif()
+set(MOLEVIS_LANGUAGES)
+set(MOLEVIS_USE_CUDA OFF)
 
-project(Mollevis ${MOLEVIS_LANGUAGES})
+project(Mollevis)
 
 # Turn warnings
 if (MSVC)
